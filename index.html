@@ -29,6 +29,9 @@
     </h1>
     <div class="topbar-right">
       <span class="status-dot" id="connStatus" title="連線狀態"></span>
+      <button class="icon-btn" id="settingsBtn" aria-label="設定">
+        <span class="icon-gear">⚙</span>
+      </button>
       <button class="icon-btn" id="historyToggle" aria-label="切換歷史/主畫面">
         <span class="icon-bars">
           <span></span><span></span><span></span>
@@ -202,6 +205,67 @@
     <div class="modal-actions">
       <button type="button" class="secondary-btn" id="settleCancel">取消</button>
       <button type="button" class="primary-btn" id="settleConfirm">確定結帳並封存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========= SETTINGS MODAL ========= -->
+<div class="modal-backdrop hidden" id="settingsModal" role="dialog" aria-modal="true">
+  <div class="modal">
+    <h2 class="modal-title">設定</h2>
+    <p class="modal-sub">App 偏好 & 工具</p>
+
+    <section class="settings-section">
+      <div class="settings-row">
+        <span class="settings-label">後端模式</span>
+        <span class="settings-value" id="settingsBackend">—</span>
+      </div>
+      <div class="settings-row">
+        <span class="settings-label">這台裝置記住的「我」</span>
+        <span class="settings-value" id="settingsMe">—</span>
+      </div>
+      <div class="settings-row">
+        <span class="settings-label">未結帳筆數</span>
+        <span class="settings-value" id="settingsUnsettled">0</span>
+      </div>
+      <div class="settings-row">
+        <span class="settings-label">已刪除筆數</span>
+        <span class="settings-value" id="settingsDeleted">0</span>
+      </div>
+      <div class="settings-row">
+        <span class="settings-label">結帳歷史筆數</span>
+        <span class="settings-value" id="settingsSettlements">0</span>
+      </div>
+    </section>
+
+    <section class="settings-danger">
+      <div class="danger-title">⚠️ 危險區域</div>
+      <p class="danger-desc">清除全部資料（未結帳、已刪除、結帳歷史）。<strong>此動作無法復原</strong>。需要密碼。</p>
+      <button type="button" class="danger-btn settings-wipe-btn" id="wipeBtn">清除所有資料</button>
+    </section>
+
+    <div class="modal-actions modal-actions-single">
+      <button type="button" class="secondary-btn" id="settingsClose">關閉</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========= WIPE PASSWORD MODAL ========= -->
+<div class="modal-backdrop hidden" id="wipeModal" role="dialog" aria-modal="true">
+  <div class="modal">
+    <h2 class="modal-title">⚠️ 清除所有資料</h2>
+    <p class="modal-sub">輸入密碼以確認</p>
+    <input
+      type="password"
+      id="wipePassword"
+      class="note-input wipe-pw-input"
+      placeholder="密碼"
+      autocomplete="off"
+      autocapitalize="off"
+      spellcheck="false">
+    <div class="modal-actions">
+      <button type="button" class="secondary-btn" id="wipeCancel">取消</button>
+      <button type="button" class="danger-btn" id="wipeConfirm">確認清除</button>
     </div>
   </div>
 </div>

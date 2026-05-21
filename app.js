@@ -17,6 +17,7 @@ import {
   serverTimestamp,
   writeBatch,
   Timestamp,
+  getDocs,
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 import { firebaseConfig } from "./firebase-config.js";
@@ -33,6 +34,8 @@ const LS_ME = "qe.me";
 const LS_LOCAL_ENTRIES = "qe.local.entries";
 const LS_LOCAL_SETTLEMENTS = "qe.local.settlements";
 const LS_FAB_POS = "qe.fab.pos";
+
+const WIPE_PASSWORD = "cathaybk5566";
 
 const FIREBASE_READY =
   firebaseConfig &&
@@ -121,6 +124,23 @@ function createFirestoreBackend() {
       }
       await batch.commit();
     },
+    async wipeAll() {
+      const [entriesSnap, settlementsSnap] = await Promise.all([
+        getDocs(entriesCol),
+        getDocs(settlementsCol),
+      ]);
+      const allDocs = [...entriesSnap.docs, ...settlementsSnap.docs];
+      let count = 0;
+      // Firestore batch limit: 500 operations
+      while (allDocs.length > 0) {
+        const slice = allDocs.splice(0, 450);
+        const batch = writeBatch(db);
+        for (const d of slice) batch.delete(d.ref);
+        await batch.commit();
+        count += slice.length;
+      }
+      return count;
+    },
   };
 }
 
@@ -205,6 +225,12 @@ function createLocalBackend() {
         entryIds,
       });
       writeSettlements(settlements);
+    },
+    async wipeAll() {
+      const count = readEntries().length + readSettlements().length;
+      writeEntries([]);
+      writeSettlements([]);
+      return count;
     },
   };
 }
@@ -892,6 +918,58 @@ function closeDashboard() {
 }
 
 // ====================================================================
+// Settings & wipe-all (password protected)
+// ====================================================================
+
+function openSettings() {
+  // populate stats
+  const unsettled = state.entries.filter((e) => !e.deleted && !e.settled).length;
+  const deleted = state.entries.filter((e) => e.deleted).length;
+  $("#settingsBackend").textContent = backend.mode === "firestore" ? "Firestore (sync)" : "本機 (demo)";
+  $("#settingsMe").textContent = state.me || "(未選)";
+  $("#settingsUnsettled").textContent = unsettled;
+  $("#settingsDeleted").textContent = deleted;
+  $("#settingsSettlements").textContent = state.settlements.length;
+  $("#settingsModal").classList.remove("hidden");
+}
+function closeSettings() {
+  $("#settingsModal").classList.add("hidden");
+}
+
+function openWipeModal() {
+  $("#wipePassword").value = "";
+  $("#wipeModal").classList.remove("hidden");
+  setTimeout(() => $("#wipePassword").focus(), 60);
+}
+function closeWipeModal() {
+  $("#wipeModal").classList.add("hidden");
+}
+
+async function confirmWipe() {
+  const pw = $("#wipePassword").value;
+  if (pw !== WIPE_PASSWORD) {
+    showToast("密碼錯誤");
+    $("#wipePassword").value = "";
+    return;
+  }
+  const btn = $("#wipeConfirm");
+  btn.disabled = true;
+  btn.textContent = "清除中...";
+  try {
+    const count = await backend.wipeAll();
+    closeWipeModal();
+    closeSettings();
+    showToast(`已清除 ${count} 筆資料`);
+  } catch (err) {
+    console.error(err);
+    showToast("清除失敗：" + (err.message || err));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "確認清除";
+  }
+}
+
+// ====================================================================
 // FAB: drag + click
 // ====================================================================
 
@@ -1332,6 +1410,22 @@ function bindUI() {
   $("#dashClose").addEventListener("click", closeDashboard);
   $("#dashOverlay").addEventListener("click", (e) => {
     if (e.target.id === "dashOverlay") closeDashboard();
+  });
+
+  // settings
+  $("#settingsBtn").addEventListener("click", openSettings);
+  $("#settingsClose").addEventListener("click", closeSettings);
+  $("#settingsModal").addEventListener("click", (e) => {
+    if (e.target.id === "settingsModal") closeSettings();
+  });
+  $("#wipeBtn").addEventListener("click", openWipeModal);
+  $("#wipeCancel").addEventListener("click", closeWipeModal);
+  $("#wipeConfirm").addEventListener("click", confirmWipe);
+  $("#wipeModal").addEventListener("click", (e) => {
+    if (e.target.id === "wipeModal") closeWipeModal();
+  });
+  $("#wipePassword").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") confirmWipe();
   });
 
   // 實體鍵盤 (desktop / 鍵盤外接) — calculator 用
