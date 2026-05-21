@@ -492,21 +492,19 @@ body::after {
   padding: 24px 0;
 }
 
-/* ========== Bottom bar ========== */
-.bottom-spacer { height: 100px; }
-.bottom-bar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 5;
-  padding: 14px 16px calc(14px + var(--safe-bot));
-  background: linear-gradient(0deg, var(--bg-0) 50%, transparent);
-  display: flex;
-  justify-content: center;
+/* ========== Bottom spacing ========== */
+.bottom-spacer { height: calc(24px + var(--safe-bot)); }
+
+/* ========== Inline settle button ========== */
+.settle-wrap {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--line);
 }
-.bottom-bar > * { max-width: 540px; width: 100%; }
+.settle-wrap.hidden { display: none !important; }
+
 .settle-btn {
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -719,7 +717,7 @@ body::after {
 .toast {
   position: fixed;
   left: 50%;
-  bottom: calc(120px + var(--safe-bot));
+  bottom: calc(32px + var(--safe-bot));
   transform: translateX(-50%);
   z-index: 200;
   padding: 10px 18px;

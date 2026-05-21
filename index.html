@@ -122,9 +122,17 @@
       </div>
       <ul class="entries-list" id="entriesList"></ul>
       <p class="empty" id="entriesEmpty">目前還沒有任何糾纏 ✨</p>
+
+      <!-- Settle button (inline at the end so you must scroll past all records) -->
+      <div class="settle-wrap" id="settleWrap">
+        <button type="button" class="settle-btn" id="settleBtn">
+          <span class="settle-icon">💰</span>
+          <span class="settle-text">結帳</span>
+          <span class="settle-meta" id="settleMeta"></span>
+        </button>
+      </div>
     </section>
 
-    <!-- spacer for sticky settle bar -->
     <div class="bottom-spacer"></div>
   </main>
 
@@ -154,15 +162,6 @@
 
     <div class="bottom-spacer"></div>
   </main>
-
-  <!-- Sticky settle bar -->
-  <div class="bottom-bar" id="bottomBar">
-    <button type="button" class="settle-btn" id="settleBtn">
-      <span class="settle-icon">💰</span>
-      <span class="settle-text">結帳</span>
-      <span class="settle-meta" id="settleMeta"></span>
-    </button>
-  </div>
 
 </div>
 

@@ -3,7 +3,7 @@
 //   - 自家檔案（HTML/CSS/JS/icons/manifest）：network-first，失敗 fallback 到 cache
 //   - 第三方（Firebase SDK CDN、Firestore API）：直接 network、不快取
 
-const CACHE = "qe-shell-v4";
+const CACHE = "qe-shell-v5";
 
 const SHELL = [
   "./",

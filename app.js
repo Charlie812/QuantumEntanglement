@@ -438,13 +438,16 @@ function buildEntryEl(e) {
 function renderSettleBar() {
   const meta = $("#settleMeta");
   const btn = $("#settleBtn");
+  const wrap = $("#settleWrap");
   const r = computeSettlement(state.entries);
   if (r.activeCount === 0) {
     meta.textContent = "";
     btn.disabled = true;
+    wrap?.classList.add("hidden");
   } else {
     meta.textContent = `${r.activeCount} 筆 / $${r.totalAmount.toLocaleString("en-US")}`;
     btn.disabled = false;
+    wrap?.classList.remove("hidden");
   }
 }
 
@@ -504,7 +507,6 @@ function renderHistory() {
 function renderViewToggle() {
   $("#mainView").classList.toggle("hidden", state.view !== "main");
   $("#historyView").classList.toggle("hidden", state.view !== "history");
-  $("#bottomBar").classList.toggle("hidden", state.view !== "main");
   $("#historyToggle").classList.toggle("active", state.view === "history");
 }
 
