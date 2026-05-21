@@ -3,14 +3,17 @@
 //   - 自家檔案（HTML/CSS/JS/icons/manifest）：network-first，失敗 fallback 到 cache
 //   - 第三方（Firebase SDK CDN、Firestore API）：直接 network、不快取
 
-const CACHE = "qe-shell-v6";
+const CACHE = "qe-shell-v7";
+
+// 不放進 cache 的路徑（永遠走 network）
+// firebase-config.js 改了之後不能讓 SW 餵舊版 —— 不然 user 會一直停在 Demo 模式。
+const NEVER_CACHE = ["/firebase-config.js"];
 
 const SHELL = [
   "./",
   "./index.html",
   "./app.css",
   "./app.js",
-  "./firebase-config.js",
   "./manifest.json",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
@@ -45,6 +48,12 @@ self.addEventListener("fetch", (event) => {
 
   // Never cache cross-origin (Firebase SDK / Firestore / Google APIs)
   if (url.origin !== self.location.origin) return;
+
+  // Skip caching for blacklisted paths (e.g. firebase-config.js)
+  if (NEVER_CACHE.some((p) => url.pathname.endsWith(p))) {
+    event.respondWith(fetch(req));
+    return;
+  }
 
   // Network-first for same-origin assets
   event.respondWith(
