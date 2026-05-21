@@ -713,6 +713,306 @@ body::after {
   padding: 8px 0;
 }
 
+/* ========== Floating dashboard FAB ========== */
+.dash-fab {
+  position: fixed;
+  bottom: calc(20px + var(--safe-bot));
+  right: calc(20px + var(--safe-right));
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(0, 229, 255, 0.55), transparent 60%),
+    radial-gradient(circle at 70% 75%, rgba(255, 94, 196, 0.55), transparent 60%),
+    var(--bg-2);
+  border: 1px solid var(--line-2);
+  box-shadow:
+    0 8px 28px rgba(139, 108, 255, 0.45),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  animation: fab-float 4s ease-in-out infinite;
+  transition: transform 0.15s ease, box-shadow 0.2s;
+}
+.dash-fab:active {
+  transform: scale(0.93);
+}
+.dash-fab.hidden { display: none !important; }
+
+@keyframes fab-float {
+  0%, 100% { transform: translateY(0); box-shadow: 0 8px 28px rgba(139,108,255,0.45), inset 0 0 0 1px rgba(255,255,255,0.06); }
+  50%      { transform: translateY(-3px); box-shadow: 0 14px 36px rgba(139,108,255,0.6), inset 0 0 0 1px rgba(255,255,255,0.08); }
+}
+
+.fab-icon {
+  width: 30px;
+  height: 30px;
+  overflow: visible;
+}
+.fab-link {
+  stroke: rgba(255, 255, 255, 0.25);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+  animation: fab-link-flow 3s linear infinite;
+}
+@keyframes fab-link-flow {
+  to { stroke-dashoffset: -10; }
+}
+.fab-dot {
+  filter: drop-shadow(0 0 4px currentColor);
+  animation: fab-dot-pulse 2.4s ease-in-out infinite;
+}
+.fab-dot-charlie { fill: var(--c-charlie); color: var(--c-charlie); animation-delay: 0s; }
+.fab-dot-weixian { fill: var(--c-weixian); color: var(--c-weixian); animation-delay: 0.8s; }
+.fab-dot-eric    { fill: var(--c-eric);    color: var(--c-eric);    animation-delay: 1.6s; }
+@keyframes fab-dot-pulse {
+  0%, 100% { opacity: 0.7; }
+  50%      { opacity: 1; }
+}
+
+.fab-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--c-accent);
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--bg-0);
+}
+.fab-badge.hidden { display: none !important; }
+
+/* ========== Dashboard overlay ========== */
+.dash-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  background: rgba(2, 2, 8, 0.75);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(20px, var(--safe-top)) 16px max(20px, var(--safe-bot));
+  animation: fade-in 0.22s ease;
+}
+.dash-modal {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(0,229,255,0.07), transparent 50%),
+    radial-gradient(circle at 100% 100%, rgba(255,94,196,0.07), transparent 50%),
+    var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 22px 18px 20px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  animation: dash-pop 0.32s cubic-bezier(0.18, 0.9, 0.3, 1.05);
+  overflow: hidden;
+}
+@keyframes dash-pop {
+  from { transform: scale(0.88) translateY(20px); opacity: 0; }
+  to   { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+.dash-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-3);
+  color: var(--text-2);
+  font-size: 22px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+.dash-close:active { background: var(--bg-2); }
+
+.dash-head {
+  text-align: center;
+  margin-bottom: 6px;
+}
+.dash-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  background: linear-gradient(90deg, var(--c-charlie), var(--c-weixian), var(--c-eric));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.dash-sub {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ========== Dashboard canvas (SVG) ========== */
+.dash-canvas {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  max-height: 56vh;
+  margin: 4px auto 0;
+}
+.dash-canvas svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Orbs */
+.dash-orb-halo {
+  opacity: 0.35;
+  animation: orb-halo 3.6s ease-in-out infinite;
+}
+.dash-orb-halo.charlie { fill: var(--c-charlie); animation-delay: 0s; }
+.dash-orb-halo.weixian { fill: var(--c-weixian); animation-delay: 0.6s; }
+.dash-orb-halo.eric    { fill: var(--c-eric);    animation-delay: 1.2s; }
+@keyframes orb-halo {
+  0%, 100% { opacity: 0.22; }
+  50%      { opacity: 0.48; }
+}
+
+.dash-orb-core {
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: orb-pulse 3.6s ease-in-out infinite;
+}
+.dash-orb-core.charlie { fill: var(--c-charlie); animation-delay: 0s; }
+.dash-orb-core.weixian { fill: var(--c-weixian); animation-delay: 0.6s; }
+.dash-orb-core.eric    { fill: var(--c-eric);    animation-delay: 1.2s; }
+@keyframes orb-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.06); }
+}
+
+.dash-orb-name {
+  font-size: 13px;
+  font-weight: 700;
+  fill: white;
+  text-anchor: middle;
+  letter-spacing: 0.5px;
+  pointer-events: none;
+}
+.dash-orb-bal {
+  font-size: 11px;
+  font-weight: 600;
+  text-anchor: middle;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.dash-orb-bal.positive { fill: var(--c-success); }
+.dash-orb-bal.negative { fill: #ffe2e8; }
+.dash-orb-bal.zero     { fill: rgba(255,255,255,0.65); }
+
+/* Lines (flowing dashes from debtor → creditor) */
+.dash-line {
+  stroke-linecap: round;
+  stroke-dasharray: 5 9;
+  animation: dash-flow 1.4s linear infinite;
+  filter: drop-shadow(0 0 6px currentColor);
+}
+@keyframes dash-flow {
+  to { stroke-dashoffset: -14; }
+}
+
+/* Flowing particles along the line */
+.dash-particle {
+  filter: drop-shadow(0 0 6px currentColor);
+}
+
+/* Amount label on lines */
+.dash-label-bg {
+  fill: var(--bg-2);
+  stroke: var(--line-2);
+  stroke-width: 1;
+}
+.dash-label-text {
+  font-size: 13px;
+  font-weight: 700;
+  fill: white;
+  text-anchor: middle;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+/* Empty state overlay inside canvas */
+.dash-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  pointer-events: none;
+}
+.dash-empty.hidden { display: none !important; }
+.dash-empty-glyph {
+  font-size: 48px;
+  animation: orb-halo 3s ease-in-out infinite;
+}
+.dash-empty-text {
+  font-size: 16px;
+  color: var(--text-1);
+  margin-top: 8px;
+  font-weight: 600;
+}
+.dash-empty-sub {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 4px;
+}
+
+/* ========== Dashboard summary list ========== */
+.dash-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  max-height: 22vh;
+  overflow-y: auto;
+}
+.dash-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+}
+.dash-summary-row .from-to { display: flex; gap: 6px; align-items: center; font-weight: 600; }
+.dash-summary-row .arrow { color: var(--text-3); }
+.dash-summary-row .amt {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: white;
+}
+
 /* ========== Toast ========== */
 .toast {
   position: fixed;

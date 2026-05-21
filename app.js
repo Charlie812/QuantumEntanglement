@@ -22,6 +22,13 @@ import {
 import { firebaseConfig } from "./firebase-config.js";
 
 const PEOPLE = ["Charlie", "偉賢", "Eric"];
+const PERSON_CLASS = { Charlie: "charlie", "偉賢": "weixian", Eric: "eric" };
+const ORB_POSITIONS = {
+  Charlie: { x: 180, y: 78 },
+  "偉賢":   { x: 70,  y: 282 },
+  Eric:    { x: 290, y: 282 },
+};
+const SVG_NS = "http://www.w3.org/2000/svg";
 const LS_ME = "qe.me";
 const LS_LOCAL_ENTRIES = "qe.local.entries";
 const LS_LOCAL_SETTLEMENTS = "qe.local.settlements";
@@ -328,6 +335,7 @@ function render() {
   renderHistory();
   renderViewToggle();
   renderHistoryTabs();
+  renderDashboard();
 }
 
 function renderPickers() {
@@ -516,6 +524,187 @@ function renderHistoryTabs() {
   });
   $("#tabUnsettled").classList.toggle("hidden", state.historyTab !== "unsettled");
   $("#tabSettlements").classList.toggle("hidden", state.historyTab !== "settlements");
+}
+
+// ====================================================================
+// Entanglement dashboard (FAB → SVG visualization)
+// ====================================================================
+
+function svgEl(tag, attrs = {}) {
+  const el = document.createElementNS(SVG_NS, tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  return el;
+}
+
+function renderDashboard() {
+  const r = computeSettlement(state.entries);
+  const fabBadge = $("#fabBadge");
+  const fab = $("#dashFab");
+
+  // FAB visibility: only on main view
+  fab?.classList.toggle("hidden", state.view !== "main");
+
+  // FAB badge: show un-settled count
+  if (r.activeCount > 0) {
+    fabBadge.textContent = r.activeCount > 99 ? "99+" : String(r.activeCount);
+    fabBadge.classList.remove("hidden");
+  } else {
+    fabBadge.classList.add("hidden");
+  }
+
+  // Sub-title
+  if (r.activeCount === 0) {
+    $("#dashSub").textContent = "目前沒有未結帳的糾纏";
+  } else {
+    $("#dashSub").textContent = `未結算 ${r.activeCount} 筆 · 共 NT$${r.totalAmount.toLocaleString("en-US")}`;
+  }
+
+  // Empty state overlay on canvas
+  $("#dashEmpty").classList.toggle("hidden", r.activeCount > 0);
+
+  renderDashboardOrbs(r);
+  renderDashboardLines(r);
+  renderDashboardSummary(r);
+}
+
+function renderDashboardOrbs(r) {
+  const g = $("#dashOrbs");
+  g.innerHTML = "";
+  for (const p of PEOPLE) {
+    const pos = ORB_POSITIONS[p];
+    const cls = PERSON_CLASS[p];
+    const bal = r.balances?.[p] || 0;
+
+    const grp = svgEl("g", { transform: `translate(${pos.x}, ${pos.y})`, class: "dash-orb-g" });
+
+    grp.appendChild(svgEl("circle", { r: 52, class: `dash-orb-halo ${cls}` }));
+    grp.appendChild(svgEl("circle", { r: 34, class: `dash-orb-core ${cls}` }));
+
+    const name = svgEl("text", { class: "dash-orb-name", y: -2 });
+    name.textContent = p;
+    grp.appendChild(name);
+
+    let balLabel;
+    let balClass;
+    if (bal > 0) {
+      balLabel = `+$${bal.toLocaleString("en-US")}`;
+      balClass = "positive";
+    } else if (bal < 0) {
+      balLabel = `-$${(-bal).toLocaleString("en-US")}`;
+      balClass = "negative";
+    } else {
+      balLabel = "持平";
+      balClass = "zero";
+    }
+    const balEl = svgEl("text", { class: `dash-orb-bal ${balClass}`, y: 14 });
+    balEl.textContent = balLabel;
+    grp.appendChild(balEl);
+
+    g.appendChild(grp);
+  }
+}
+
+function renderDashboardLines(r) {
+  const g = $("#dashLines");
+  g.innerHTML = "";
+  if (!r.transactions || r.transactions.length === 0) return;
+
+  const colorVar = (p) => `var(--c-${PERSON_CLASS[p]})`;
+  const maxAmt = Math.max(...r.transactions.map((t) => t.amount), 1);
+
+  for (let i = 0; i < r.transactions.length; i++) {
+    const tx = r.transactions[i];
+    const from = ORB_POSITIONS[tx.from];
+    const to = ORB_POSITIONS[tx.to];
+    const stroke = colorVar(tx.to);
+    const thickness = 4 + (tx.amount / maxAmt) * 9;
+
+    // 1) flowing dashed line debtor → creditor
+    g.appendChild(svgEl("line", {
+      x1: from.x, y1: from.y, x2: to.x, y2: to.y,
+      stroke,
+      "stroke-width": thickness,
+      class: "dash-line",
+      style: `color:${stroke};`,
+    }));
+
+    // 2) two flowing particles along the same path (staggered)
+    for (let k = 0; k < 2; k++) {
+      const particle = svgEl("circle", {
+        r: Math.max(3, thickness * 0.45),
+        fill: stroke,
+        class: "dash-particle",
+        style: `color:${stroke};`,
+      });
+      const motion = svgEl("animateMotion", {
+        dur: "2.4s",
+        repeatCount: "indefinite",
+        begin: `${k * 1.2}s`,
+        path: `M ${from.x} ${from.y} L ${to.x} ${to.y}`,
+        rotate: "auto",
+      });
+      particle.appendChild(motion);
+      g.appendChild(particle);
+    }
+
+    // 3) amount label at midpoint
+    const midX = (from.x + to.x) / 2;
+    const midY = (from.y + to.y) / 2;
+    const lblText = `$${tx.amount.toLocaleString("en-US")}`;
+    const lblWidth = Math.max(54, lblText.length * 9 + 14);
+    const lblG = svgEl("g", { transform: `translate(${midX}, ${midY})` });
+    lblG.appendChild(svgEl("rect", {
+      x: -lblWidth / 2, y: -12, width: lblWidth, height: 24, rx: 12,
+      class: "dash-label-bg",
+    }));
+    const txt = svgEl("text", { class: "dash-label-text", y: 5 });
+    txt.textContent = lblText;
+    lblG.appendChild(txt);
+    g.appendChild(lblG);
+  }
+}
+
+function renderDashboardSummary(r) {
+  const ul = $("#dashSummary");
+  ul.innerHTML = "";
+  if (!r.transactions || r.transactions.length === 0) return;
+
+  // sort by amount desc so biggest debt first
+  const sorted = [...r.transactions].sort((a, b) => b.amount - a.amount);
+  for (const tx of sorted) {
+    const li = document.createElement("li");
+    li.className = "dash-summary-row";
+
+    const flow = document.createElement("div");
+    flow.className = "from-to";
+    const fromS = document.createElement("span");
+    fromS.className = "entry-person";
+    fromS.dataset.person = tx.from;
+    fromS.textContent = tx.from;
+    const arrow = document.createElement("span");
+    arrow.className = "arrow";
+    arrow.textContent = "→";
+    const toS = document.createElement("span");
+    toS.className = "entry-person";
+    toS.dataset.person = tx.to;
+    toS.textContent = tx.to;
+    flow.append(fromS, arrow, toS);
+
+    const amt = document.createElement("span");
+    amt.className = "amt";
+    amt.textContent = "$" + tx.amount.toLocaleString("en-US");
+
+    li.append(flow, amt);
+    ul.append(li);
+  }
+}
+
+function openDashboard() {
+  renderDashboard();
+  $("#dashOverlay").classList.remove("hidden");
+}
+function closeDashboard() {
+  $("#dashOverlay").classList.add("hidden");
 }
 
 // ====================================================================
@@ -789,6 +978,13 @@ function bindUI() {
     });
   });
 
+  // dashboard FAB
+  $("#dashFab").addEventListener("click", openDashboard);
+  $("#dashClose").addEventListener("click", closeDashboard);
+  $("#dashOverlay").addEventListener("click", (e) => {
+    if (e.target.id === "dashOverlay") closeDashboard();
+  });
+
   // tap outside modal to close
   $("#settleModal").addEventListener("click", (e) => {
     if (e.target.id === "settleModal") closeSettleModal();
@@ -842,6 +1038,7 @@ function init() {
     renderEntries();
     renderHistoryEntries();
     renderSettleBar();
+    renderDashboard();
   });
   backend.subscribeSettlements((items) => {
     state.settlements = items;

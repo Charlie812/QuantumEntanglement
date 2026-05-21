@@ -200,6 +200,49 @@
   </div>
 </div>
 
+<!-- ========= ENTANGLEMENT DASHBOARD FAB ========= -->
+<button type="button" class="dash-fab" id="dashFab" aria-label="即時糾纏 dashboard">
+  <svg class="fab-icon" viewBox="0 0 32 32" aria-hidden="true">
+    <line x1="16" y1="6"  x2="6"  y2="24" class="fab-link fab-link-1"/>
+    <line x1="16" y1="6"  x2="26" y2="24" class="fab-link fab-link-2"/>
+    <line x1="6"  y1="24" x2="26" y2="24" class="fab-link fab-link-3"/>
+    <circle cx="16" cy="6"  r="3.5" class="fab-dot fab-dot-charlie"/>
+    <circle cx="6"  cy="24" r="3.5" class="fab-dot fab-dot-weixian"/>
+    <circle cx="26" cy="24" r="3.5" class="fab-dot fab-dot-eric"/>
+  </svg>
+  <span class="fab-badge hidden" id="fabBadge">0</span>
+</button>
+
+<!-- ========= DASHBOARD OVERLAY ========= -->
+<div class="dash-overlay hidden" id="dashOverlay" role="dialog" aria-modal="true">
+  <div class="dash-modal">
+    <button type="button" class="dash-close" id="dashClose" aria-label="關閉">×</button>
+    <div class="dash-head">
+      <h2 class="dash-title">即時糾纏</h2>
+      <p class="dash-sub" id="dashSub">—</p>
+    </div>
+
+    <div class="dash-canvas">
+      <svg id="dashSvg" viewBox="0 0 360 360" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+        <defs>
+          <filter id="dash-blur" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="8"/>
+          </filter>
+        </defs>
+        <g id="dashLines" class="dash-lines-group"></g>
+        <g id="dashOrbs" class="dash-orbs-group"></g>
+      </svg>
+      <div class="dash-empty hidden" id="dashEmpty">
+        <div class="dash-empty-glyph">✨</div>
+        <div class="dash-empty-text">目前沒有糾纏</div>
+        <div class="dash-empty-sub">記一筆才會出現流動</div>
+      </div>
+    </div>
+
+    <ul class="dash-summary" id="dashSummary"></ul>
+  </div>
+</div>
+
 <!-- ========= TOAST ========= -->
 <div class="toast hidden" id="toast"></div>
 
