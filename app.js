@@ -214,7 +214,8 @@ const state = {
   note: "",
   entries: [],
   settlements: [],
-  view: "main",
+  view: "main",                 // "main" | "history"
+  historyTab: "unsettled",      // "unsettled" | "settlements"
   pendingDeleteId: null,
 };
 
@@ -269,36 +270,41 @@ function fullTime(ms) {
 // Settlement algorithm (minimum cash flow)
 // ====================================================================
 
+// Pair-net 結算：對每對兩個人單獨算淨額，照原始債務方向轉
+// 例：Charlie 欠偉賢 100、偉賢欠 Charlie 30 → Charlie 付偉賢 70
+//     Charlie 欠 Eric 50、Eric 不欠 Charlie → Charlie 付 Eric 50
+//     共兩筆轉帳，方向跟記帳的方向一致
 function computeSettlement(entries) {
   const active = entries.filter((e) => !e.deleted && !e.settled);
+
+  // per-person 淨額（顯示用）
   const balance = Object.fromEntries(PEOPLE.map((p) => [p, 0]));
   for (const e of active) {
-    balance[e.from] = (balance[e.from] || 0) - e.amount;
-    balance[e.to] = (balance[e.to] || 0) + e.amount;
+    balance[e.from] -= e.amount;
+    balance[e.to] += e.amount;
   }
-  const b = { ...balance };
+
+  // pair sums (有方向)
+  const pairSums = {};
+  for (const e of active) {
+    const k = `${e.from}|${e.to}`;
+    pairSums[k] = (pairSums[k] || 0) + e.amount;
+  }
+
+  // 對每組無序 pair 算淨額
   const txs = [];
-  while (true) {
-    let credName = null,
-      credVal = 0;
-    let debtName = null,
-      debtVal = 0;
-    for (const p of PEOPLE) {
-      if (b[p] > credVal) {
-        credVal = b[p];
-        credName = p;
-      }
-      if (b[p] < debtVal) {
-        debtVal = b[p];
-        debtName = p;
-      }
+  for (let i = 0; i < PEOPLE.length; i++) {
+    for (let j = i + 1; j < PEOPLE.length; j++) {
+      const a = PEOPLE[i];
+      const b = PEOPLE[j];
+      const aToB = pairSums[`${a}|${b}`] || 0;
+      const bToA = pairSums[`${b}|${a}`] || 0;
+      const net = aToB - bToA;
+      if (net > 0) txs.push({ from: a, to: b, amount: net });
+      else if (net < 0) txs.push({ from: b, to: a, amount: -net });
     }
-    if (!credName || !debtName || credVal < 1 || debtVal > -1) break;
-    const amount = Math.min(credVal, -debtVal);
-    txs.push({ from: debtName, to: credName, amount });
-    b[credName] -= amount;
-    b[debtName] += amount;
   }
+
   return {
     balances: balance,
     transactions: txs,
@@ -318,8 +324,10 @@ function render() {
   renderSubmit();
   renderEntries();
   renderSettleBar();
+  renderHistoryEntries();
   renderHistory();
   renderViewToggle();
+  renderHistoryTabs();
 }
 
 function renderPickers() {
@@ -352,67 +360,79 @@ function renderSubmit() {
 }
 
 function renderEntries() {
-  const list = $("#entriesList");
-  const empty = $("#entriesEmpty");
   const active = state.entries.filter((e) => !e.deleted && !e.settled);
   $("#entryCount").textContent = active.length;
-  list.innerHTML = "";
-  if (active.length === 0) {
-    empty.classList.remove("hidden");
+  fillEntryList($("#entriesList"), $("#entriesEmpty"), active);
+}
+
+function renderHistoryEntries() {
+  const active = state.entries.filter((e) => !e.deleted && !e.settled);
+  $("#histUnsettledCount").textContent = active.length;
+  fillEntryList($("#historyEntriesList"), $("#historyEntriesEmpty"), active);
+}
+
+function fillEntryList(listEl, emptyEl, entries) {
+  if (!listEl) return;
+  listEl.innerHTML = "";
+  if (entries.length === 0) {
+    emptyEl?.classList.remove("hidden");
     return;
   }
-  empty.classList.add("hidden");
-
-  for (const e of active) {
-    const li = document.createElement("li");
-    li.className = "entry entry-card";
-    li.dataset.id = e.id;
-
-    const flow = document.createElement("div");
-    flow.className = "entry-flow";
-    const from = document.createElement("span");
-    from.className = "entry-person";
-    from.dataset.person = e.from;
-    from.textContent = e.from;
-    const arrow = document.createElement("span");
-    arrow.className = "entry-arrow";
-    arrow.textContent = "→";
-    const to = document.createElement("span");
-    to.className = "entry-person";
-    to.dataset.person = e.to;
-    to.textContent = e.to;
-    flow.append(from, arrow, to);
-
-    const meta = document.createElement("div");
-    meta.className = "entry-meta";
-    const amount = document.createElement("span");
-    amount.className = "entry-amount";
-    amount.textContent = "$" + e.amount.toLocaleString("en-US");
-    const sub = document.createElement("span");
-    sub.className = "entry-sub";
-    sub.textContent = relTime(tsToMs(e.createdAt));
-    sub.title = fullTime(tsToMs(e.createdAt));
-    meta.append(amount, sub);
-
-    const top = document.createElement("div");
-    top.style.display = "flex";
-    top.style.justifyContent = "space-between";
-    top.style.alignItems = "center";
-    top.style.gap = "10px";
-    top.style.width = "100%";
-    top.append(flow, meta);
-    li.append(top);
-
-    if (e.note) {
-      const noteEl = document.createElement("div");
-      noteEl.className = "entry-note";
-      noteEl.textContent = "“" + e.note + "”";
-      li.append(noteEl);
-    }
-
-    attachLongPress(li, e.id, e);
-    list.append(li);
+  emptyEl?.classList.add("hidden");
+  for (const e of entries) {
+    listEl.append(buildEntryEl(e));
   }
+}
+
+function buildEntryEl(e) {
+  const li = document.createElement("li");
+  li.className = "entry entry-card";
+  li.dataset.id = e.id;
+
+  const flow = document.createElement("div");
+  flow.className = "entry-flow";
+  const from = document.createElement("span");
+  from.className = "entry-person";
+  from.dataset.person = e.from;
+  from.textContent = e.from;
+  const arrow = document.createElement("span");
+  arrow.className = "entry-arrow";
+  arrow.textContent = "→";
+  const to = document.createElement("span");
+  to.className = "entry-person";
+  to.dataset.person = e.to;
+  to.textContent = e.to;
+  flow.append(from, arrow, to);
+
+  const meta = document.createElement("div");
+  meta.className = "entry-meta";
+  const amount = document.createElement("span");
+  amount.className = "entry-amount";
+  amount.textContent = "$" + e.amount.toLocaleString("en-US");
+  const sub = document.createElement("span");
+  sub.className = "entry-sub";
+  sub.textContent = relTime(tsToMs(e.createdAt));
+  sub.title = fullTime(tsToMs(e.createdAt));
+  meta.append(amount, sub);
+
+  const top = document.createElement("div");
+  top.style.display = "flex";
+  top.style.justifyContent = "space-between";
+  top.style.alignItems = "center";
+  top.style.gap = "10px";
+  top.style.width = "100%";
+  top.append(flow, meta);
+  li.append(top);
+
+  if (e.note) {
+    const noteEl = document.createElement("div");
+    noteEl.className = "entry-note";
+    noteEl.textContent = "“" + e.note + "”";
+    li.append(noteEl);
+  }
+
+  attachLongPress(li, e.id, e);
+  return li;
 }
 
 function renderSettleBar() {
@@ -486,6 +506,14 @@ function renderViewToggle() {
   $("#historyView").classList.toggle("hidden", state.view !== "history");
   $("#bottomBar").classList.toggle("hidden", state.view !== "main");
   $("#historyToggle").classList.toggle("active", state.view === "history");
+}
+
+function renderHistoryTabs() {
+  $$("#historyTabs .tab").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.tab === state.historyTab);
+  });
+  $("#tabUnsettled").classList.toggle("hidden", state.historyTab !== "unsettled");
+  $("#tabSettlements").classList.toggle("hidden", state.historyTab !== "settlements");
 }
 
 // ====================================================================
@@ -751,6 +779,14 @@ function bindUI() {
   // history toggle
   $("#historyToggle").addEventListener("click", toggleView);
 
+  // history tabs
+  $$("#historyTabs .tab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.historyTab = btn.dataset.tab;
+      renderHistoryTabs();
+    });
+  });
+
   // tap outside modal to close
   $("#settleModal").addEventListener("click", (e) => {
     if (e.target.id === "settleModal") closeSettleModal();
@@ -802,6 +838,7 @@ function init() {
   backend.subscribeEntries((items) => {
     state.entries = items;
     renderEntries();
+    renderHistoryEntries();
     renderSettleBar();
   });
   backend.subscribeSettlements((items) => {

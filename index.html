@@ -130,13 +130,28 @@
 
   <!-- ========= HISTORY VIEW ========= -->
   <main id="historyView" class="view hidden">
-    <section class="records">
+    <div class="tabs" id="historyTabs">
+      <button type="button" class="tab active" data-tab="unsettled">未結帳記錄</button>
+      <button type="button" class="tab" data-tab="settlements">結帳歷史</button>
+    </div>
+
+    <section class="tab-content" id="tabUnsettled">
+      <div class="records-head">
+        <h2>所有未結帳的糾纏</h2>
+        <span class="count-pill" id="histUnsettledCount">0</span>
+      </div>
+      <ul class="entries-list" id="historyEntriesList"></ul>
+      <p class="empty" id="historyEntriesEmpty">目前沒有未結帳的糾纏</p>
+    </section>
+
+    <section class="tab-content hidden" id="tabSettlements">
       <div class="records-head">
         <h2>結帳歷史</h2>
       </div>
       <ul class="settlements-list" id="settlementsList"></ul>
       <p class="empty" id="settlementsEmpty">還沒有結過帳</p>
     </section>
+
     <div class="bottom-spacer"></div>
   </main>
 
@@ -163,7 +178,7 @@
     </div>
 
     <div class="tx-block">
-      <div class="block-label">最少轉帳次數</div>
+      <div class="block-label">誰要轉給誰</div>
       <ul class="txs" id="settleTxs"></ul>
     </div>
 

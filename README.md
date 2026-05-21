@@ -129,13 +129,16 @@ Console 有暴露 `window.__qe`（state / computeSettlement / backend）方便 d
 
 ---
 
-## 結算演算法簡介
+## 結算演算法
 
-「最小現金流」(minimum cash flow) — 三人之間互相 IOU 經過淨額計算後，最多 2 筆轉帳就清乾淨：
+**Pair-net**：對每組兩個人單獨算淨額、照原本的記帳方向轉帳。
 
-例：Charlie 欠偉賢 $100、偉賢欠 Eric $50、Eric 欠 Charlie $30
-- 淨額：Charlie **−70**、偉賢 **+50**、Eric **+20**
-- 結算：Charlie 付偉賢 $50 + Charlie 付 Eric $20
+例：Charlie 欠偉賢 $100、偉賢欠 Charlie $30、Charlie 欠 Eric $50
+- Charlie ↔ 偉賢：Charlie 付偉賢 $70（100 - 30）
+- Charlie ↔ Eric：Charlie 付 Eric $50
+- 偉賢 ↔ Eric：不用轉
+
+每組轉一筆、最多 3 筆。比起「最小轉帳次數」可能多一兩筆，但「誰欠誰多少」一眼可見，不會把錢從 A 繞到 B 再繞到 C。
 
 ---
 
