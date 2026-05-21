@@ -1032,6 +1032,15 @@ function bezierPointAt(t, p0, ctrl, p1) {
   };
 }
 
+// derivative — gives tangent direction at t (for accurate perpendicular along curve)
+function bezierTangent(t, p0, ctrl, p1) {
+  const u = 1 - t;
+  return {
+    x: 2 * u * (ctrl.x - p0.x) + 2 * t * (p1.x - ctrl.x),
+    y: 2 * u * (ctrl.y - p0.y) + 2 * t * (p1.y - ctrl.y),
+  };
+}
+
 function rebuildStreamsAndAuras() {
   canvasState.streams.length = 0;
   canvasState.auras.length = 0;
@@ -1074,21 +1083,28 @@ function rebuildStreamsAndAuras() {
     const ep = lineEndpoints(fromPos, toPos, startR, endR);
     const curve = curvedPath(ep.start, ep.end, 0.22);
     const ratio = tx.amount / maxAmt;
-    const count = Math.round(55 + ratio * 60); // 55~115
+    const count = Math.round(90 + ratio * 90); // 90~180 — 密集
     const color = PERSON_RGB[tx.to];
+    // stream 寬度（金額越大、ribbon 越粗）
+    const streamWidth = 5 + Math.pow(ratio, 0.5) * 14; // 5~19
 
     for (let i = 0; i < count; i++) {
+      // lateralBase 分散在 stream 寬度內、用 normal-like 分布（偏中間）讓中軸最密
+      const u = Math.random() + Math.random() - 1; // -1~1 triangular
       canvasState.streams.push({
         p0: ep.start,
         p1: ep.end,
         ctrl: { x: curve.ctrlX, y: curve.ctrlY },
         color,
         t: Math.random(),
-        speed: (0.0035 + Math.random() * 0.0055) * (0.6 + ratio * 0.9),
-        size: 0.6 + Math.random() * (1.2 + ratio * 1.4),
-        whiteCore: Math.random() < 0.18,
-        wobbleAmp: 0.6 + Math.random() * 1.4,
-        wobbleFreq: 0.05 + Math.random() * 0.12,
+        speed: (0.0028 + Math.random() * 0.005) * (0.6 + ratio * 0.7),
+        size: 0.5 + Math.random() * (1.1 + ratio * 1.5),
+        whiteCore: Math.random() < 0.16,
+        // 流線參數
+        lateralBase: u * (streamWidth / 2),       // 固定 lateral 偏移、形成 ribbon 寬度
+        lateralAmp: 0.3 + Math.random() * 1.6,    // 額外抖動幅度
+        lateralFreq: 1.2 + Math.random() * 3.5,   // 抖動頻率
+        lateralPhase: Math.random() * Math.PI * 2,
       });
     }
   }
@@ -1112,9 +1128,9 @@ function tickCanvas() {
     canvasState.needsRebuild = false;
   }
 
-  // 拖尾 — partial fade per frame
+  // 拖尾 — partial fade per frame (4% = ~25 frame trail = 更長的 ribbon)
   ctx.globalCompositeOperation = "destination-out";
-  ctx.fillStyle = "rgba(0,0,0,0.085)"; // ~12 frame trail
+  ctx.fillStyle = "rgba(0,0,0,0.045)";
   ctx.fillRect(0, 0, SCENE_W, SCENE_H);
 
   // additive (bloom)
@@ -1150,20 +1166,23 @@ function tickCanvas() {
     drawGlowDot(ctx, x, y, o.size, o.color, a);
   }
 
-  // ---- Stream particles (bezier flow) ----
+  // ---- Stream particles (bezier flow with ribbon-like lateral spread) ----
   for (const s of canvasState.streams) {
     s.t += s.speed;
     if (s.t > 1) s.t -= 1; // recycle smoothly
+
+    // 沿曲線取點 + tangent (才能算正確的 perpendicular)
     const pt = bezierPointAt(s.t, s.p0, s.ctrl, s.p1);
-    // perpendicular wobble for organic feel
-    const dx = s.p1.x - s.p0.x;
-    const dy = s.p1.y - s.p0.y;
-    const len = Math.hypot(dx, dy) || 1;
-    const px = -dy / len;
-    const py = dx / len;
-    const wob = Math.sin(now * 3 + s.t * 12 + s.wobbleFreq) * s.wobbleAmp;
-    const x = pt.x + px * wob;
-    const y = pt.y + py * wob;
+    const tan = bezierTangent(s.t, s.p0, s.ctrl, s.p1);
+    const tlen = Math.hypot(tan.x, tan.y) || 1;
+    const px = -tan.y / tlen;
+    const py = tan.x / tlen;
+
+    // lateral = 固定偏移 + sin 抖動 (粒子互相穿插、形成 ribbon-weave)
+    const wob = Math.sin(s.t * s.lateralFreq * Math.PI * 2 + s.lateralPhase + now * 1.2) * s.lateralAmp;
+    const lateral = s.lateralBase + wob;
+    const x = pt.x + px * lateral;
+    const y = pt.y + py * lateral;
 
     // lifecycle fade at extremes (smooth in/out)
     const lifeFade =
@@ -1171,7 +1190,7 @@ function tickCanvas() {
       s.t > 0.94 ? (1 - s.t) / 0.06 : 1;
 
     if (s.whiteCore) {
-      drawGlowDot(ctx, x, y, s.size, [255, 255, 255], 0.9 * lifeFade);
+      drawGlowDot(ctx, x, y, s.size, [255, 255, 255], 0.95 * lifeFade);
     } else {
       drawGlowDot(ctx, x, y, s.size, s.color, 0.85 * lifeFade);
     }
@@ -1182,21 +1201,18 @@ function tickCanvas() {
 
 function drawGlowDot(ctx, x, y, r, color, alpha) {
   const [cr, cg, cb] = color;
-  // 3-pass glow stack
-  // outer halo
+  // 3-pass glow stack — halo 加大讓鄰近粒子互相融合 = ribbon-like bloom
   ctx.beginPath();
-  ctx.arc(x, y, r * 4.5, 0, Math.PI * 2);
-  ctx.fillStyle = `rgba(${cr},${cg},${cb},${alpha * 0.10})`;
+  ctx.arc(x, y, r * 6, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(${cr},${cg},${cb},${alpha * 0.06})`;
   ctx.fill();
-  // mid glow
   ctx.beginPath();
-  ctx.arc(x, y, r * 2.2, 0, Math.PI * 2);
-  ctx.fillStyle = `rgba(${cr},${cg},${cb},${alpha * 0.25})`;
+  ctx.arc(x, y, r * 2.8, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(${cr},${cg},${cb},${alpha * 0.22})`;
   ctx.fill();
-  // bright core
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fillStyle = `rgba(${cr},${cg},${cb},${alpha * 0.9})`;
+  ctx.fillStyle = `rgba(${cr},${cg},${cb},${alpha * 0.92})`;
   ctx.fill();
 }
 
