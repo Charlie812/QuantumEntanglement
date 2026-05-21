@@ -736,10 +736,12 @@ function renderDashboard() {
   }
 
   renderDashboardTerritory(r);
-  renderDashboardStars();
   renderDashboardLines(r, orbSizes);
   renderDashboardOrbs(r, orbSizes);
   renderDashboardSummary(r);
+
+  // 同步 canvas 粒子系統
+  refreshDashCanvas(r, orbSizes);
 }
 
 // 勢力板塊背景 — 各人正向 net balance 越大、自己那一邊的光暈越大
@@ -872,85 +874,19 @@ function renderDashboardOrbs(r, orbSizes) {
   }
 }
 
+// 線改全交給 canvas、SVG 只放金額 pill (才能用一般文字 + 圓角背景)
 function renderDashboardLines(r, orbSizes) {
   const g = $("#dashLines");
   g.innerHTML = "";
   if (!r.transactions || r.transactions.length === 0) return;
 
-  const colorVar = (p) => `var(--c-${PERSON_CLASS[p]})`;
-  const maxAmt = Math.max(...r.transactions.map((t) => t.amount), 1);
-
   for (const tx of r.transactions) {
     const fromPos = ORB_POSITIONS[tx.from];
     const toPos = ORB_POSITIONS[tx.to];
-    const stroke = colorVar(tx.to);
-    const ratio = tx.amount / maxAmt;
-
     const ep = lineEndpoints(fromPos, toPos, orbSizes[tx.from] - 2, orbSizes[tx.to] - 2);
-
-    // 曲線 path（彎向 canvas 外側）
     const curve = curvedPath(ep.start, ep.end, 0.22);
-    const pathD = curve.d;
 
-    // creditor-end 越粗、用 sqrt scale 強調差距
-    const baseW = 6 + Math.pow(ratio, 0.5) * 22; // 6~28
-
-    // Layer 1: 厚 blurred glow（背景大光暈）
-    g.appendChild(svgEl("path", {
-      d: pathD,
-      fill: "none",
-      stroke,
-      "stroke-width": baseW * 1.6,
-      "stroke-linecap": "round",
-      class: "dash-stream-glow",
-      style: `color:${stroke};`,
-    }));
-
-    // Layer 2: 中層（mid blur）
-    g.appendChild(svgEl("path", {
-      d: pathD,
-      fill: "none",
-      stroke,
-      "stroke-width": baseW,
-      "stroke-linecap": "round",
-      class: "dash-stream-mid",
-      style: `color:${stroke};`,
-    }));
-
-    // Layer 3: 亮白核心虛線（顯示流向）
-    g.appendChild(svgEl("path", {
-      d: pathD,
-      fill: "none",
-      stroke: "white",
-      "stroke-width": Math.max(1.2, baseW * 0.18),
-      class: "dash-stream-core",
-    }));
-
-    // 粒子沿曲線跑（金額越大、顆數越多）
-    const particleCount = Math.max(6, Math.round(6 + ratio * 14)); // 6~20
-    const dur = 2.4 - ratio * 1.1; // 越大流越快
-    for (let k = 0; k < particleCount; k++) {
-      const isWhite = k % 4 === 0;
-      const sizeJitter = 0.6 + Math.random() * 0.9;
-      const pr = Math.max(1.5, baseW * 0.16 * sizeJitter);
-      const particle = svgEl("circle", {
-        r: pr,
-        fill: isWhite ? "white" : stroke,
-        class: "dash-particle",
-        style: `color:${stroke}; opacity:${isWhite ? 0.95 : 0.85};`,
-      });
-      const motion = svgEl("animateMotion", {
-        dur: (dur * (0.7 + Math.random() * 0.6)) + "s",
-        repeatCount: "indefinite",
-        begin: `${(k * dur) / particleCount}s`,
-        path: pathD,
-        rotate: "auto",
-      });
-      particle.appendChild(motion);
-      g.appendChild(particle);
-    }
-
-    // 金額 pill — 放在曲線控制點附近（曲線最彎那一段中點），避免擋到 orb
+    // 金額 pill at curve midpoint
     const labelX = (ep.start.x + ep.end.x) / 2 * 0.5 + curve.ctrlX * 0.5;
     const labelY = (ep.start.y + ep.end.y) / 2 * 0.5 + curve.ctrlY * 0.5;
     const lblText = `$${tx.amount.toLocaleString("en-US")}`;
@@ -1016,20 +952,42 @@ function closeDashboard() {
 // Canvas 星塵粒子系統 (背景宇宙感)
 // ====================================================================
 
-const CANVAS_PARTICLE_COUNT = 160;
-const PARTICLE_COLORS = [
-  [0, 229, 255],     // cyan
-  [255, 94, 196],    // pink
-  [255, 210, 74],    // amber
-  [139, 108, 255],   // violet
-  [255, 255, 255],   // white
+// ================================================
+// Canvas particle system v2 — fluid streams + auras
+// 全部用 0-360 SVG viewBox 座標、canvas 用 setTransform 自動 scale
+// ================================================
+
+const SCENE_W = 360;
+const SCENE_H = 360;
+
+const PERSON_RGB = {
+  Charlie: [0, 229, 255],
+  "偉賢":   [255, 94, 196],
+  Eric:    [255, 210, 74],
+};
+
+const BG_COLORS = [
+  [0, 229, 255],
+  [255, 94, 196],
+  [255, 210, 74],
+  [139, 108, 255],
+  [255, 255, 255],
   [255, 255, 255],
 ];
-const canvasParticles = [];
+
+const canvasState = {
+  bg: [],        // background drifters
+  streams: [],   // line flow particles
+  auras: [],     // orbital particles around each orb
+  needsRebuild: true,
+  txs: [],
+  orbSizes: {},
+};
+
 let canvasAnimHandle = null;
 let canvasDimsCache = null;
 
-function initCanvasParticles() {
+function initCanvas() {
   const canvas = $("#dashCanvas");
   if (!canvas) return null;
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -1038,25 +996,102 @@ function initCanvasParticles() {
   canvas.width = Math.round(rect.width * dpr);
   canvas.height = Math.round(rect.height * dpr);
   const ctx = canvas.getContext("2d");
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  // map 0-360 SVG space onto canvas
+  const sx = (rect.width * dpr) / SCENE_W;
+  const sy = (rect.height * dpr) / SCENE_H;
+  ctx.setTransform(sx, 0, 0, sy, 0, 0);
+  ctx.clearRect(0, 0, SCENE_W, SCENE_H);
   canvasDimsCache = { w: rect.width, h: rect.height, dpr };
 
-  canvasParticles.length = 0;
-  for (let i = 0; i < CANVAS_PARTICLE_COUNT; i++) {
-    const c = PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)];
-    canvasParticles.push({
-      x: Math.random() * rect.width,
-      y: Math.random() * rect.height,
-      vx: (Math.random() - 0.5) * 0.4,
-      vy: (Math.random() - 0.5) * 0.4,
-      r: 0.3 + Math.random() * 2.0,
-      color: c,
-      baseAlpha: 0.15 + Math.random() * 0.65,
-      pulsePhase: Math.random() * Math.PI * 2,
-      pulseSpeed: 0.4 + Math.random() * 1.6,
-    });
+  // background drifters — 一次性 spawn
+  if (canvasState.bg.length === 0) {
+    for (let i = 0; i < 110; i++) {
+      const c = BG_COLORS[Math.floor(Math.random() * BG_COLORS.length)];
+      canvasState.bg.push({
+        x: Math.random() * SCENE_W,
+        y: Math.random() * SCENE_H,
+        vx: (Math.random() - 0.5) * 0.18,
+        vy: (Math.random() - 0.5) * 0.18,
+        r: 0.4 + Math.random() * 2.2,
+        color: c,
+        a: 0.15 + Math.random() * 0.6,
+        phase: Math.random() * Math.PI * 2,
+        speed: 0.4 + Math.random() * 1.6,
+      });
+    }
   }
+  canvasState.needsRebuild = true;
   return canvasDimsCache;
+}
+
+function bezierPointAt(t, p0, ctrl, p1) {
+  const u = 1 - t;
+  return {
+    x: u * u * p0.x + 2 * u * t * ctrl.x + t * t * p1.x,
+    y: u * u * p0.y + 2 * u * t * ctrl.y + t * t * p1.y,
+  };
+}
+
+function rebuildStreamsAndAuras() {
+  canvasState.streams.length = 0;
+  canvasState.auras.length = 0;
+
+  // Orbit auras for each person — 數量依正向 balance 增加
+  for (const p of PEOPLE) {
+    const pos = ORB_POSITIONS[p];
+    const baseR = canvasState.orbSizes[p] || 32;
+    const color = PERSON_RGB[p];
+    // count: 18~32 depending on orb size
+    const count = Math.round(18 + ((baseR - 18) / 32) * 14);
+    for (let i = 0; i < count; i++) {
+      canvasState.auras.push({
+        cx: pos.x, cy: pos.y,
+        baseR,
+        radOffset: 4 + Math.random() * (baseR * 0.6),
+        angle: Math.random() * Math.PI * 2,
+        omega: (Math.random() < 0.5 ? -1 : 1) * (0.004 + Math.random() * 0.012),
+        size: 0.5 + Math.random() * 1.6,
+        color,
+        ellipseRatio: 0.55 + Math.random() * 0.45,
+        tiltCos: Math.cos(Math.random() * Math.PI),
+        tiltSin: Math.sin(Math.random() * Math.PI),
+        phase: Math.random() * Math.PI * 2,
+        pulseSpeed: 0.6 + Math.random() * 1.8,
+      });
+    }
+  }
+
+  // Stream particles for each transaction
+  const txs = canvasState.txs || [];
+  if (txs.length === 0) return;
+  const maxAmt = Math.max(...txs.map((t) => t.amount), 1);
+
+  for (const tx of txs) {
+    const fromPos = ORB_POSITIONS[tx.from];
+    const toPos = ORB_POSITIONS[tx.to];
+    const startR = (canvasState.orbSizes[tx.from] || 32) - 2;
+    const endR = (canvasState.orbSizes[tx.to] || 32) - 2;
+    const ep = lineEndpoints(fromPos, toPos, startR, endR);
+    const curve = curvedPath(ep.start, ep.end, 0.22);
+    const ratio = tx.amount / maxAmt;
+    const count = Math.round(55 + ratio * 60); // 55~115
+    const color = PERSON_RGB[tx.to];
+
+    for (let i = 0; i < count; i++) {
+      canvasState.streams.push({
+        p0: ep.start,
+        p1: ep.end,
+        ctrl: { x: curve.ctrlX, y: curve.ctrlY },
+        color,
+        t: Math.random(),
+        speed: (0.0035 + Math.random() * 0.0055) * (0.6 + ratio * 0.9),
+        size: 0.6 + Math.random() * (1.2 + ratio * 1.4),
+        whiteCore: Math.random() < 0.18,
+        wobbleAmp: 0.6 + Math.random() * 1.4,
+        wobbleFreq: 0.05 + Math.random() * 0.12,
+      });
+    }
+  }
 }
 
 function tickCanvas() {
@@ -1066,53 +1101,115 @@ function tickCanvas() {
     return;
   }
   const ctx = canvas.getContext("2d");
-  const dims = canvasDimsCache || initCanvasParticles();
-  if (!dims) {
-    canvasAnimHandle = requestAnimationFrame(tickCanvas);
-    return;
+  if (!canvasDimsCache) {
+    if (!initCanvas()) {
+      canvasAnimHandle = requestAnimationFrame(tickCanvas);
+      return;
+    }
   }
-  const { w, h } = dims;
+  if (canvasState.needsRebuild) {
+    rebuildStreamsAndAuras();
+    canvasState.needsRebuild = false;
+  }
 
-  // 淡淡的拖尾感
+  // 拖尾 — partial fade per frame
   ctx.globalCompositeOperation = "destination-out";
-  ctx.fillStyle = "rgba(0,0,0,0.18)";
-  ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = "rgba(0,0,0,0.085)"; // ~12 frame trail
+  ctx.fillRect(0, 0, SCENE_W, SCENE_H);
 
-  // additive blending = bloom 感
+  // additive (bloom)
   ctx.globalCompositeOperation = "lighter";
 
-  const t = performance.now() * 0.001;
-  for (const p of canvasParticles) {
+  const now = performance.now() * 0.001;
+
+  // ---- Background drifters ----
+  for (const p of canvasState.bg) {
     p.x += p.vx;
     p.y += p.vy;
-    if (p.x < -5) p.x = w + 5;
-    if (p.x > w + 5) p.x = -5;
-    if (p.y < -5) p.y = h + 5;
-    if (p.y > h + 5) p.y = -5;
+    if (p.x < -3) p.x = SCENE_W + 3;
+    else if (p.x > SCENE_W + 3) p.x = -3;
+    if (p.y < -3) p.y = SCENE_H + 3;
+    else if (p.y > SCENE_H + 3) p.y = -3;
 
-    const pulse = (Math.sin(t * p.pulseSpeed + p.pulsePhase) + 1) * 0.5;
-    const a = p.baseAlpha * (0.35 + pulse * 0.65);
-    const [r, g, b] = p.color;
+    const pulse = (Math.sin(now * p.speed + p.phase) + 1) * 0.5;
+    const a = p.a * (0.3 + pulse * 0.7);
+    drawGlowDot(ctx, p.x, p.y, p.r, p.color, a);
+  }
 
-    // 3 層 glow（從大到小、alpha 累加 = bloom）
-    for (let pass = 2; pass >= 0; pass--) {
-      const rad = p.r * (1 + pass * 2.4);
-      const opacity = a * (pass === 0 ? 1 : 0.35 / (pass + 1));
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, rad, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(${r},${g},${b},${opacity})`;
-      ctx.fill();
+  // ---- Orb auras (orbital particles) ----
+  for (const o of canvasState.auras) {
+    o.angle += o.omega;
+    const r = o.baseR + o.radOffset;
+    const lx = Math.cos(o.angle) * r;
+    const ly = Math.sin(o.angle) * r * o.ellipseRatio;
+    // rotate by tilt
+    const x = o.cx + lx * o.tiltCos - ly * o.tiltSin;
+    const y = o.cy + lx * o.tiltSin + ly * o.tiltCos;
+    const pulse = (Math.sin(now * o.pulseSpeed + o.phase) + 1) * 0.5;
+    const a = 0.45 + pulse * 0.55;
+    drawGlowDot(ctx, x, y, o.size, o.color, a);
+  }
+
+  // ---- Stream particles (bezier flow) ----
+  for (const s of canvasState.streams) {
+    s.t += s.speed;
+    if (s.t > 1) s.t -= 1; // recycle smoothly
+    const pt = bezierPointAt(s.t, s.p0, s.ctrl, s.p1);
+    // perpendicular wobble for organic feel
+    const dx = s.p1.x - s.p0.x;
+    const dy = s.p1.y - s.p0.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const px = -dy / len;
+    const py = dx / len;
+    const wob = Math.sin(now * 3 + s.t * 12 + s.wobbleFreq) * s.wobbleAmp;
+    const x = pt.x + px * wob;
+    const y = pt.y + py * wob;
+
+    // lifecycle fade at extremes (smooth in/out)
+    const lifeFade =
+      s.t < 0.06 ? s.t / 0.06 :
+      s.t > 0.94 ? (1 - s.t) / 0.06 : 1;
+
+    if (s.whiteCore) {
+      drawGlowDot(ctx, x, y, s.size, [255, 255, 255], 0.9 * lifeFade);
+    } else {
+      drawGlowDot(ctx, x, y, s.size, s.color, 0.85 * lifeFade);
     }
   }
 
   canvasAnimHandle = requestAnimationFrame(tickCanvas);
 }
 
+function drawGlowDot(ctx, x, y, r, color, alpha) {
+  const [cr, cg, cb] = color;
+  // 3-pass glow stack
+  // outer halo
+  ctx.beginPath();
+  ctx.arc(x, y, r * 4.5, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(${cr},${cg},${cb},${alpha * 0.10})`;
+  ctx.fill();
+  // mid glow
+  ctx.beginPath();
+  ctx.arc(x, y, r * 2.2, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(${cr},${cg},${cb},${alpha * 0.25})`;
+  ctx.fill();
+  // bright core
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(${cr},${cg},${cb},${alpha * 0.9})`;
+  ctx.fill();
+}
+
+function refreshDashCanvas(r, orbSizes) {
+  canvasState.txs = r?.transactions || [];
+  canvasState.orbSizes = orbSizes || {};
+  canvasState.needsRebuild = true;
+}
+
 function startCanvasAnimation() {
   if (canvasAnimHandle) return;
-  // wait one frame so layout settles
   requestAnimationFrame(() => {
-    initCanvasParticles();
+    initCanvas();
     canvasAnimHandle = requestAnimationFrame(tickCanvas);
   });
 }
@@ -1124,9 +1221,7 @@ function stopCanvasAnimation() {
   }
 }
 
-// 視窗變化、重 init canvas (size 改變)
 window.addEventListener("resize", () => {
-  if (!canvasAnimHandle) return;
   canvasDimsCache = null;
 });
 
