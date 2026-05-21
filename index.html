@@ -323,6 +323,18 @@
             </feTurbulence>
             <feDisplacementMap in="SourceGraphic" in2="noise" scale="12"/>
           </filter>
+          <!-- 文字深色光暈 — 柔性陰影 (替代醜醜的矩形 pill) -->
+          <filter id="textShadow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur in="SourceAlpha" stdDeviation="1.6"/>
+            <feFlood flood-color="black" flood-opacity="1"/>
+            <feComposite in2="SourceAlpha" operator="in"/>
+            <feMerge>
+              <feMergeNode/>
+              <feMergeNode/>
+              <feMergeNode/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
           <radialGradient id="terr-charlie" cx="50%" cy="50%" r="50%">
             <stop offset="0%"   stop-color="#00e5ff" stop-opacity="0.32"/>
             <stop offset="55%"  stop-color="#00e5ff" stop-opacity="0.08"/>
@@ -338,24 +350,24 @@
             <stop offset="55%"  stop-color="#ffd24a" stop-opacity="0.09"/>
             <stop offset="100%" stop-color="#ffd24a" stop-opacity="0"/>
           </radialGradient>
-          <!-- Orb 球體漸層 — 深邃版（中心不再泛白、邊緣更深） -->
+          <!-- Orb 球體漸層 — 深邃版（中心再壓低、讓白字 readable） -->
           <radialGradient id="orb-grad-charlie" cx="38%" cy="32%" r="70%">
-            <stop offset="0%"   stop-color="#a4e5f4" stop-opacity="0.95"/>
-            <stop offset="28%"  stop-color="#4ac5dc" stop-opacity="1"/>
-            <stop offset="65%"  stop-color="#0a86a8" stop-opacity="0.95"/>
-            <stop offset="100%" stop-color="#041824" stop-opacity="0.92"/>
+            <stop offset="0%"   stop-color="#7ed4e6" stop-opacity="0.95"/>
+            <stop offset="30%"  stop-color="#2ba6c2" stop-opacity="1"/>
+            <stop offset="68%"  stop-color="#075c78" stop-opacity="0.97"/>
+            <stop offset="100%" stop-color="#020e16" stop-opacity="0.95"/>
           </radialGradient>
           <radialGradient id="orb-grad-weixian" cx="38%" cy="32%" r="70%">
-            <stop offset="0%"   stop-color="#ffbedc" stop-opacity="0.95"/>
-            <stop offset="28%"  stop-color="#f57ac0" stop-opacity="1"/>
-            <stop offset="65%"  stop-color="#b32482" stop-opacity="0.95"/>
-            <stop offset="100%" stop-color="#260418" stop-opacity="0.92"/>
+            <stop offset="0%"   stop-color="#f5a8c8" stop-opacity="0.95"/>
+            <stop offset="30%"  stop-color="#e066af" stop-opacity="1"/>
+            <stop offset="68%"  stop-color="#90185f" stop-opacity="0.97"/>
+            <stop offset="100%" stop-color="#1a0210" stop-opacity="0.95"/>
           </radialGradient>
           <radialGradient id="orb-grad-eric" cx="38%" cy="32%" r="70%">
-            <stop offset="0%"   stop-color="#ffe89a" stop-opacity="0.95"/>
-            <stop offset="28%"  stop-color="#f5c032" stop-opacity="1"/>
-            <stop offset="65%"  stop-color="#9c7600" stop-opacity="0.95"/>
-            <stop offset="100%" stop-color="#241a00" stop-opacity="0.92"/>
+            <stop offset="0%"   stop-color="#f0d684" stop-opacity="0.95"/>
+            <stop offset="30%"  stop-color="#d9a420" stop-opacity="1"/>
+            <stop offset="68%"  stop-color="#785a00" stop-opacity="0.97"/>
+            <stop offset="100%" stop-color="#171000" stop-opacity="0.95"/>
           </radialGradient>
         </defs>
         <g id="dashTerritory" class="dash-territory-group"></g>

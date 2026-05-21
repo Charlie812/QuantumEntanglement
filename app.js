@@ -850,7 +850,7 @@ function renderDashboardOrbs(r, orbSizes) {
       filter: bal > 0 ? "url(#energy-strong)" : "url(#energy)",
     }));
 
-    // 文字背後加半透明深色底 pill — 不靠 CSS、保證在任何 orb 顏色上都讀得到
+    // 文字用 SVG filter 加柔性深色光暈 (替代矩形 pill 的醜遮罩)
     let balLabel, balFillColor;
     if (bal > 0) {
       balLabel = `+$${bal.toLocaleString("en-US")}`;
@@ -860,47 +860,32 @@ function renderDashboardOrbs(r, orbSizes) {
       balFillColor = "#ff8d99";
     } else {
       balLabel = "持平";
-      balFillColor = "rgba(255,255,255,0.85)";
+      balFillColor = "rgba(255,255,255,0.92)";
     }
 
-    const pillWidth = Math.max(56, Math.max(p.length * 12, balLabel.length * 8 + 6) + 6);
-    grp.appendChild(svgEl("rect", {
-      x: -pillWidth / 2, y: -16,
-      width: pillWidth, height: 32,
-      rx: 8,
-      fill: "rgba(0,0,0,0.62)",
-      "pointer-events": "none",
-    }));
-
-    // 名字 — 全部 styling 走 SVG attribute、不靠 CSS
+    // 名字 — 走 SVG attribute + 柔性 dropshadow filter
     const name = svgEl("text", {
       x: 0, y: -3,
       "text-anchor": "middle",
       "font-size": "14",
-      "font-weight": "800",
-      "letter-spacing": "0.5",
+      "font-weight": "600",
       fill: "#ffffff",
-      "paint-order": "stroke fill",
-      stroke: "rgba(0,0,0,0.6)",
-      "stroke-width": "2.5",
-      "stroke-linejoin": "round",
+      filter: "url(#textShadow)",
       "pointer-events": "none",
     });
     name.textContent = p;
     grp.appendChild(name);
 
-    // 平衡金額 — 鮮明顏色
+    // 平衡金額
     const balEl = svgEl("text", {
       x: 0, y: 12,
       "text-anchor": "middle",
-      "font-size": "12",
-      "font-weight": "800",
+      "font-size": "11.5",
+      "font-weight": "600",
       "font-variant-numeric": "tabular-nums",
+      "letter-spacing": "0.3",
       fill: balFillColor,
-      "paint-order": "stroke fill",
-      stroke: "rgba(0,0,0,0.6)",
-      "stroke-width": "2.2",
-      "stroke-linejoin": "round",
+      filter: "url(#textShadow)",
       "pointer-events": "none",
     });
     balEl.textContent = balLabel;
