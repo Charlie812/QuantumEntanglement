@@ -1003,18 +1003,18 @@ function initCanvas() {
   ctx.clearRect(0, 0, SCENE_W, SCENE_H);
   canvasDimsCache = { w: rect.width, h: rect.height, dpr };
 
-  // background drifters — 一次性 spawn
+  // background drifters — 一次性 spawn (砍量 + 降亮度)
   if (canvasState.bg.length === 0) {
-    for (let i = 0; i < 110; i++) {
+    for (let i = 0; i < 80; i++) {
       const c = BG_COLORS[Math.floor(Math.random() * BG_COLORS.length)];
       canvasState.bg.push({
         x: Math.random() * SCENE_W,
         y: Math.random() * SCENE_H,
-        vx: (Math.random() - 0.5) * 0.18,
-        vy: (Math.random() - 0.5) * 0.18,
-        r: 0.4 + Math.random() * 2.2,
+        vx: (Math.random() - 0.5) * 0.14,
+        vy: (Math.random() - 0.5) * 0.14,
+        r: 0.3 + Math.random() * 1.6,
         color: c,
-        a: 0.15 + Math.random() * 0.6,
+        a: 0.08 + Math.random() * 0.38,
         phase: Math.random() * Math.PI * 2,
         speed: 0.4 + Math.random() * 1.6,
       });
@@ -1045,21 +1045,20 @@ function rebuildStreamsAndAuras() {
   canvasState.streams.length = 0;
   canvasState.auras.length = 0;
 
-  // Orbit auras for each person — 數量依正向 balance 增加
+  // Orbit auras for each person — 數量更少、size 更小
   for (const p of PEOPLE) {
     const pos = ORB_POSITIONS[p];
     const baseR = canvasState.orbSizes[p] || 32;
     const color = PERSON_RGB[p];
-    // count: 18~32 depending on orb size
-    const count = Math.round(18 + ((baseR - 18) / 32) * 14);
+    const count = Math.round(10 + ((baseR - 18) / 32) * 12); // 10~22
     for (let i = 0; i < count; i++) {
       canvasState.auras.push({
         cx: pos.x, cy: pos.y,
         baseR,
-        radOffset: 4 + Math.random() * (baseR * 0.6),
+        radOffset: 3 + Math.random() * (baseR * 0.5),
         angle: Math.random() * Math.PI * 2,
-        omega: (Math.random() < 0.5 ? -1 : 1) * (0.004 + Math.random() * 0.012),
-        size: 0.5 + Math.random() * 1.6,
+        omega: (Math.random() < 0.5 ? -1 : 1) * (0.003 + Math.random() * 0.009),
+        size: 0.35 + Math.random() * 1.0,
         color,
         ellipseRatio: 0.55 + Math.random() * 0.45,
         tiltCos: Math.cos(Math.random() * Math.PI),
@@ -1083,27 +1082,26 @@ function rebuildStreamsAndAuras() {
     const ep = lineEndpoints(fromPos, toPos, startR, endR);
     const curve = curvedPath(ep.start, ep.end, 0.22);
     const ratio = tx.amount / maxAmt;
-    const count = Math.round(90 + ratio * 90); // 90~180 — 密集
+    const count = Math.round(40 + ratio * 60); // 40~100 — 收斂
     const color = PERSON_RGB[tx.to];
-    // stream 寬度（金額越大、ribbon 越粗）
-    const streamWidth = 5 + Math.pow(ratio, 0.5) * 14; // 5~19
+    // stream 寬度收窄（金額越大才寬）
+    const streamWidth = 2 + Math.pow(ratio, 0.55) * 7; // 2~9
 
     for (let i = 0; i < count; i++) {
-      // lateralBase 分散在 stream 寬度內、用 normal-like 分布（偏中間）讓中軸最密
-      const u = Math.random() + Math.random() - 1; // -1~1 triangular
+      // triangular 分布 偏中間
+      const u = Math.random() + Math.random() - 1;
       canvasState.streams.push({
         p0: ep.start,
         p1: ep.end,
         ctrl: { x: curve.ctrlX, y: curve.ctrlY },
         color,
         t: Math.random(),
-        speed: (0.0028 + Math.random() * 0.005) * (0.6 + ratio * 0.7),
-        size: 0.5 + Math.random() * (1.1 + ratio * 1.5),
-        whiteCore: Math.random() < 0.16,
-        // 流線參數
-        lateralBase: u * (streamWidth / 2),       // 固定 lateral 偏移、形成 ribbon 寬度
-        lateralAmp: 0.3 + Math.random() * 1.6,    // 額外抖動幅度
-        lateralFreq: 1.2 + Math.random() * 3.5,   // 抖動頻率
+        speed: (0.0026 + Math.random() * 0.0042) * (0.6 + ratio * 0.7),
+        size: 0.35 + Math.random() * (0.7 + ratio * 0.9), // 更小
+        whiteCore: Math.random() < 0.10,
+        lateralBase: u * (streamWidth / 2),
+        lateralAmp: 0.15 + Math.random() * 0.7,
+        lateralFreq: 1.2 + Math.random() * 3.5,
         lateralPhase: Math.random() * Math.PI * 2,
       });
     }
@@ -1128,9 +1126,9 @@ function tickCanvas() {
     canvasState.needsRebuild = false;
   }
 
-  // 拖尾 — partial fade per frame (4% = ~25 frame trail = 更長的 ribbon)
+  // 拖尾 — 7.5% per frame (~14 frame trail) 不要過糊
   ctx.globalCompositeOperation = "destination-out";
-  ctx.fillStyle = "rgba(0,0,0,0.045)";
+  ctx.fillStyle = "rgba(0,0,0,0.075)";
   ctx.fillRect(0, 0, SCENE_W, SCENE_H);
 
   // additive (bloom)
@@ -1190,9 +1188,9 @@ function tickCanvas() {
       s.t > 0.94 ? (1 - s.t) / 0.06 : 1;
 
     if (s.whiteCore) {
-      drawGlowDot(ctx, x, y, s.size, [255, 255, 255], 0.95 * lifeFade);
+      drawGlowDot(ctx, x, y, s.size, [255, 255, 255], 0.7 * lifeFade);
     } else {
-      drawGlowDot(ctx, x, y, s.size, s.color, 0.85 * lifeFade);
+      drawGlowDot(ctx, x, y, s.size, s.color, 0.62 * lifeFade);
     }
   }
 
@@ -1201,18 +1199,18 @@ function tickCanvas() {
 
 function drawGlowDot(ctx, x, y, r, color, alpha) {
   const [cr, cg, cb] = color;
-  // 3-pass glow stack — halo 加大讓鄰近粒子互相融合 = ribbon-like bloom
+  // 3-pass glow stack — halo 收緊、core 銳利 = 更有質感
   ctx.beginPath();
-  ctx.arc(x, y, r * 6, 0, Math.PI * 2);
+  ctx.arc(x, y, r * 3.5, 0, Math.PI * 2);
   ctx.fillStyle = `rgba(${cr},${cg},${cb},${alpha * 0.06})`;
   ctx.fill();
   ctx.beginPath();
-  ctx.arc(x, y, r * 2.8, 0, Math.PI * 2);
-  ctx.fillStyle = `rgba(${cr},${cg},${cb},${alpha * 0.22})`;
+  ctx.arc(x, y, r * 1.7, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(${cr},${cg},${cb},${alpha * 0.20})`;
   ctx.fill();
   ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fillStyle = `rgba(${cr},${cg},${cb},${alpha * 0.92})`;
+  ctx.arc(x, y, r * 0.9, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(${cr},${cg},${cb},${alpha * 0.95})`;
   ctx.fill();
 }
 
