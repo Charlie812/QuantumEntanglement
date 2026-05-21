@@ -944,11 +944,49 @@ body::after {
   aspect-ratio: 1;
   max-height: 56vh;
   margin: 4px auto 0;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.dash-canvas-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
 }
 .dash-canvas svg {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   display: block;
+  z-index: 1;
+}
+.dash-empty { z-index: 2; }
+
+/* 曲線能量流 — 三層: glow / mid / bright core */
+.dash-stream-glow {
+  opacity: 0.4;
+  filter: blur(10px);
+  animation: stream-breathe 3s ease-in-out infinite;
+}
+.dash-stream-mid {
+  opacity: 0.78;
+  filter: blur(2.5px);
+  animation: stream-breathe 3s ease-in-out infinite 0.5s;
+}
+.dash-stream-core {
+  stroke-linecap: round;
+  stroke-dasharray: 3 10;
+  animation: dash-flow 1s linear infinite;
+  filter: drop-shadow(0 0 4px white);
+  opacity: 0.9;
+  pointer-events: none;
+}
+@keyframes stream-breathe {
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 0.75; }
 }
 
 /* Territory background (force field per person) */
@@ -1031,11 +1069,11 @@ body::after {
   transform-origin: center;
   transform-box: fill-box;
   animation: orb-pulse 3.6s ease-in-out infinite;
-  filter: drop-shadow(0 0 8px currentColor);
+  filter: drop-shadow(0 0 12px currentColor);
 }
-.dash-orb-core.charlie { fill: var(--c-charlie); color: var(--c-charlie); animation-delay: 0s; }
-.dash-orb-core.weixian { fill: var(--c-weixian); color: var(--c-weixian); animation-delay: 0.6s; }
-.dash-orb-core.eric    { fill: var(--c-eric);    color: var(--c-eric);    animation-delay: 1.2s; }
+.dash-orb-core.charlie { color: var(--c-charlie); animation-delay: 0s; }
+.dash-orb-core.weixian { color: var(--c-weixian); animation-delay: 0.6s; }
+.dash-orb-core.eric    { color: var(--c-eric);    animation-delay: 1.2s; }
 @keyframes orb-pulse {
   0%, 100% { transform: scale(1); }
   50%      { transform: scale(1.08); }

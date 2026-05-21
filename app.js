@@ -672,13 +672,30 @@ function taperPath(x1, y1, x2, y2, w1, w2) {
   const dx = x2 - x1, dy = y2 - y1;
   const len = Math.hypot(dx, dy);
   if (len === 0) return "";
-  // perpendicular unit vector
   const ux = -dy / len, uy = dx / len;
   const h1 = w1 / 2, h2 = w2 / 2;
   return `M ${x1 + ux * h1} ${y1 + uy * h1} ` +
          `L ${x2 + ux * h2} ${y2 + uy * h2} ` +
          `L ${x2 - ux * h2} ${y2 - uy * h2} ` +
          `L ${x1 - ux * h1} ${y1 - uy * h1} Z`;
+}
+
+// 帶曲線的 path — 控制點偏移在 canvas 中心反方向，讓三條線往外彎
+const CANVAS_CENTER = { x: 180, y: 180 };
+function curvedPath(p1, p2, curvature = 0.22) {
+  const midX = (p1.x + p2.x) / 2;
+  const midY = (p1.y + p2.y) / 2;
+  const dx = p2.x - p1.x, dy = p2.y - p1.y;
+  const len = Math.hypot(dx, dy) || 1;
+  // 垂直單位向量
+  let nx = -dy / len, ny = dx / len;
+  // 判斷哪個方向是「離 canvas 中心更遠」
+  const dInside  = Math.hypot(midX + nx - CANVAS_CENTER.x, midY + ny - CANVAS_CENTER.y);
+  const dOutside = Math.hypot(midX - nx - CANVAS_CENTER.x, midY - ny - CANVAS_CENTER.y);
+  if (dInside > dOutside) { nx = -nx; ny = -ny; }
+  const ctrlX = midX + nx * len * curvature;
+  const ctrlY = midY + ny * len * curvature;
+  return { d: `M ${p1.x} ${p1.y} Q ${ctrlX} ${ctrlY} ${p2.x} ${p2.y}`, ctrlX, ctrlY };
 }
 
 function renderDashboard() {
@@ -823,10 +840,11 @@ function renderDashboardOrbs(r, orbSizes) {
       grp.appendChild(svgEl("circle", { r: coreR + 5, class: "dash-orb-king-ring" }));
     }
 
-    // 核心 — 用 feTurbulence filter 抖動 = 能量波感
+    // 核心 — radial gradient 球體 + feTurbulence 抖動
     grp.appendChild(svgEl("circle", {
       r: coreR,
       class: `dash-orb-core ${cls}`,
+      fill: `url(#orb-grad-${cls})`,
       filter: bal > 0 ? "url(#energy-strong)" : "url(#energy)",
     }));
 
@@ -868,57 +886,76 @@ function renderDashboardLines(r, orbSizes) {
     const stroke = colorVar(tx.to);
     const ratio = tx.amount / maxAmt;
 
-    // 端點縮到 orb 邊緣
     const ep = lineEndpoints(fromPos, toPos, orbSizes[tx.from] - 2, orbSizes[tx.to] - 2);
 
-    // tapered widths — debtor 端窄、creditor 端寬（能量灌入感）
-    const w1 = 4 + Math.pow(ratio, 0.5) * 6;    // debtor: 4~10
-    const w2 = 10 + Math.pow(ratio, 0.5) * 28;  // creditor: 10~38
+    // 曲線 path（彎向 canvas 外側）
+    const curve = curvedPath(ep.start, ep.end, 0.22);
+    const pathD = curve.d;
 
-    // 1) 能量棒（tapered polygon）
+    // creditor-end 越粗、用 sqrt scale 強調差距
+    const baseW = 6 + Math.pow(ratio, 0.5) * 22; // 6~28
+
+    // Layer 1: 厚 blurred glow（背景大光暈）
     g.appendChild(svgEl("path", {
-      d: taperPath(ep.start.x, ep.start.y, ep.end.x, ep.end.y, w1, w2),
-      fill: stroke,
-      class: "dash-bar",
+      d: pathD,
+      fill: "none",
+      stroke,
+      "stroke-width": baseW * 1.6,
+      "stroke-linecap": "round",
+      class: "dash-stream-glow",
       style: `color:${stroke};`,
     }));
 
-    // 2) 中軸的白色虛線 — 顯示流動方向
-    g.appendChild(svgEl("line", {
-      x1: ep.start.x, y1: ep.start.y,
-      x2: ep.end.x, y2: ep.end.y,
-      "stroke-width": Math.max(1.4, Math.min(w1, w2) * 0.35),
-      class: "dash-line-flow",
+    // Layer 2: 中層（mid blur）
+    g.appendChild(svgEl("path", {
+      d: pathD,
+      fill: "none",
+      stroke,
+      "stroke-width": baseW,
+      "stroke-linecap": "round",
+      class: "dash-stream-mid",
+      style: `color:${stroke};`,
     }));
 
-    // 3) flowing particles（金額越大、顆數越多 + 越快、粒子越大）
-    const particleCount = Math.max(3, Math.round(3 + ratio * 4)); // 3~7
-    const dur = 2.2 - ratio * 0.9;
+    // Layer 3: 亮白核心虛線（顯示流向）
+    g.appendChild(svgEl("path", {
+      d: pathD,
+      fill: "none",
+      stroke: "white",
+      "stroke-width": Math.max(1.2, baseW * 0.18),
+      class: "dash-stream-core",
+    }));
+
+    // 粒子沿曲線跑（金額越大、顆數越多）
+    const particleCount = Math.max(6, Math.round(6 + ratio * 14)); // 6~20
+    const dur = 2.4 - ratio * 1.1; // 越大流越快
     for (let k = 0; k < particleCount; k++) {
-      const pr = Math.max(3, w2 * 0.20);
+      const isWhite = k % 4 === 0;
+      const sizeJitter = 0.6 + Math.random() * 0.9;
+      const pr = Math.max(1.5, baseW * 0.16 * sizeJitter);
       const particle = svgEl("circle", {
         r: pr,
-        fill: "white",
+        fill: isWhite ? "white" : stroke,
         class: "dash-particle",
-        style: `color:${stroke};`,
+        style: `color:${stroke}; opacity:${isWhite ? 0.95 : 0.85};`,
       });
       const motion = svgEl("animateMotion", {
-        dur: dur + "s",
+        dur: (dur * (0.7 + Math.random() * 0.6)) + "s",
         repeatCount: "indefinite",
         begin: `${(k * dur) / particleCount}s`,
-        path: `M ${ep.start.x} ${ep.start.y} L ${ep.end.x} ${ep.end.y}`,
+        path: pathD,
         rotate: "auto",
       });
       particle.appendChild(motion);
       g.appendChild(particle);
     }
 
-    // 4) 金額 pill at midpoint
-    const midX = (ep.start.x + ep.end.x) / 2;
-    const midY = (ep.start.y + ep.end.y) / 2;
+    // 金額 pill — 放在曲線控制點附近（曲線最彎那一段中點），避免擋到 orb
+    const labelX = (ep.start.x + ep.end.x) / 2 * 0.5 + curve.ctrlX * 0.5;
+    const labelY = (ep.start.y + ep.end.y) / 2 * 0.5 + curve.ctrlY * 0.5;
     const lblText = `$${tx.amount.toLocaleString("en-US")}`;
     const lblWidth = Math.max(54, lblText.length * 9 + 14);
-    const lblG = svgEl("g", { transform: `translate(${midX}, ${midY})` });
+    const lblG = svgEl("g", { transform: `translate(${labelX}, ${labelY})` });
     lblG.appendChild(svgEl("rect", {
       x: -lblWidth / 2, y: -12, width: lblWidth, height: 24, rx: 12,
       class: "dash-label-bg",
@@ -968,10 +1005,130 @@ function renderDashboardSummary(r) {
 function openDashboard() {
   renderDashboard();
   $("#dashOverlay").classList.remove("hidden");
+  startCanvasAnimation();
 }
 function closeDashboard() {
   $("#dashOverlay").classList.add("hidden");
+  stopCanvasAnimation();
 }
+
+// ====================================================================
+// Canvas 星塵粒子系統 (背景宇宙感)
+// ====================================================================
+
+const CANVAS_PARTICLE_COUNT = 160;
+const PARTICLE_COLORS = [
+  [0, 229, 255],     // cyan
+  [255, 94, 196],    // pink
+  [255, 210, 74],    // amber
+  [139, 108, 255],   // violet
+  [255, 255, 255],   // white
+  [255, 255, 255],
+];
+const canvasParticles = [];
+let canvasAnimHandle = null;
+let canvasDimsCache = null;
+
+function initCanvasParticles() {
+  const canvas = $("#dashCanvas");
+  if (!canvas) return null;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width === 0) return null;
+  canvas.width = Math.round(rect.width * dpr);
+  canvas.height = Math.round(rect.height * dpr);
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  canvasDimsCache = { w: rect.width, h: rect.height, dpr };
+
+  canvasParticles.length = 0;
+  for (let i = 0; i < CANVAS_PARTICLE_COUNT; i++) {
+    const c = PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)];
+    canvasParticles.push({
+      x: Math.random() * rect.width,
+      y: Math.random() * rect.height,
+      vx: (Math.random() - 0.5) * 0.4,
+      vy: (Math.random() - 0.5) * 0.4,
+      r: 0.3 + Math.random() * 2.0,
+      color: c,
+      baseAlpha: 0.15 + Math.random() * 0.65,
+      pulsePhase: Math.random() * Math.PI * 2,
+      pulseSpeed: 0.4 + Math.random() * 1.6,
+    });
+  }
+  return canvasDimsCache;
+}
+
+function tickCanvas() {
+  const canvas = $("#dashCanvas");
+  if (!canvas) {
+    canvasAnimHandle = null;
+    return;
+  }
+  const ctx = canvas.getContext("2d");
+  const dims = canvasDimsCache || initCanvasParticles();
+  if (!dims) {
+    canvasAnimHandle = requestAnimationFrame(tickCanvas);
+    return;
+  }
+  const { w, h } = dims;
+
+  // 淡淡的拖尾感
+  ctx.globalCompositeOperation = "destination-out";
+  ctx.fillStyle = "rgba(0,0,0,0.18)";
+  ctx.fillRect(0, 0, w, h);
+
+  // additive blending = bloom 感
+  ctx.globalCompositeOperation = "lighter";
+
+  const t = performance.now() * 0.001;
+  for (const p of canvasParticles) {
+    p.x += p.vx;
+    p.y += p.vy;
+    if (p.x < -5) p.x = w + 5;
+    if (p.x > w + 5) p.x = -5;
+    if (p.y < -5) p.y = h + 5;
+    if (p.y > h + 5) p.y = -5;
+
+    const pulse = (Math.sin(t * p.pulseSpeed + p.pulsePhase) + 1) * 0.5;
+    const a = p.baseAlpha * (0.35 + pulse * 0.65);
+    const [r, g, b] = p.color;
+
+    // 3 層 glow（從大到小、alpha 累加 = bloom）
+    for (let pass = 2; pass >= 0; pass--) {
+      const rad = p.r * (1 + pass * 2.4);
+      const opacity = a * (pass === 0 ? 1 : 0.35 / (pass + 1));
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, rad, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${r},${g},${b},${opacity})`;
+      ctx.fill();
+    }
+  }
+
+  canvasAnimHandle = requestAnimationFrame(tickCanvas);
+}
+
+function startCanvasAnimation() {
+  if (canvasAnimHandle) return;
+  // wait one frame so layout settles
+  requestAnimationFrame(() => {
+    initCanvasParticles();
+    canvasAnimHandle = requestAnimationFrame(tickCanvas);
+  });
+}
+
+function stopCanvasAnimation() {
+  if (canvasAnimHandle) {
+    cancelAnimationFrame(canvasAnimHandle);
+    canvasAnimHandle = null;
+  }
+}
+
+// 視窗變化、重 init canvas (size 改變)
+window.addEventListener("resize", () => {
+  if (!canvasAnimHandle) return;
+  canvasDimsCache = null;
+});
 
 // ====================================================================
 // Settings & wipe-all (password protected)

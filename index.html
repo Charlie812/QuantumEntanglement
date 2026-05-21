@@ -305,6 +305,7 @@
     </div>
 
     <div class="dash-canvas">
+      <canvas id="dashCanvas" class="dash-canvas-bg" aria-hidden="true"></canvas>
       <svg id="dashSvg" viewBox="0 0 360 360" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
         <defs>
           <filter id="dash-blur" x="-50%" y="-50%" width="200%" height="200%">
@@ -336,6 +337,25 @@
             <stop offset="0%"   stop-color="#ffd24a" stop-opacity="0.7"/>
             <stop offset="55%"  stop-color="#ffd24a" stop-opacity="0.2"/>
             <stop offset="100%" stop-color="#ffd24a" stop-opacity="0"/>
+          </radialGradient>
+          <!-- Orb 球體漸層 — 立體感 -->
+          <radialGradient id="orb-grad-charlie" cx="35%" cy="30%" r="70%">
+            <stop offset="0%"   stop-color="#e6fbff" stop-opacity="1"/>
+            <stop offset="22%"  stop-color="#78ecff" stop-opacity="1"/>
+            <stop offset="62%"  stop-color="#00c8eb" stop-opacity="0.95"/>
+            <stop offset="100%" stop-color="#0a3a5c" stop-opacity="0.85"/>
+          </radialGradient>
+          <radialGradient id="orb-grad-weixian" cx="35%" cy="30%" r="70%">
+            <stop offset="0%"   stop-color="#fff0fa" stop-opacity="1"/>
+            <stop offset="22%"  stop-color="#ff9fdc" stop-opacity="1"/>
+            <stop offset="62%"  stop-color="#ff4ab8" stop-opacity="0.95"/>
+            <stop offset="100%" stop-color="#5c0a3a" stop-opacity="0.85"/>
+          </radialGradient>
+          <radialGradient id="orb-grad-eric" cx="35%" cy="30%" r="70%">
+            <stop offset="0%"   stop-color="#fffbe5" stop-opacity="1"/>
+            <stop offset="22%"  stop-color="#ffe790" stop-opacity="1"/>
+            <stop offset="62%"  stop-color="#ffce2e" stop-opacity="0.95"/>
+            <stop offset="100%" stop-color="#5c4500" stop-opacity="0.85"/>
           </radialGradient>
         </defs>
         <g id="dashTerritory" class="dash-territory-group"></g>

@@ -3,7 +3,7 @@
 //   - 自家檔案（HTML/CSS/JS/icons/manifest）：network-first，失敗 fallback 到 cache
 //   - 第三方（Firebase SDK CDN、Firestore API）：直接 network、不快取
 
-const CACHE = "qe-shell-v11";
+const CACHE = "qe-shell-v12";
 
 // 不放進 cache 的路徑（永遠走 network）
 // firebase-config.js 改了之後不能讓 SW 餵舊版 —— 不然 user 會一直停在 Demo 模式。
