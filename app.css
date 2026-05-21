@@ -976,6 +976,25 @@ body::after {
   50%      { opacity: 0.9; }
 }
 
+/* Concentric energy ripples emanating from each orb */
+.dash-orb-ripple {
+  fill: none;
+  stroke-width: 2;
+  opacity: 0;
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: ripple-out 2.7s ease-out infinite;
+  pointer-events: none;
+}
+.dash-orb-ripple.charlie { color: var(--c-charlie); stroke: var(--c-charlie); }
+.dash-orb-ripple.weixian { color: var(--c-weixian); stroke: var(--c-weixian); }
+.dash-orb-ripple.eric    { color: var(--c-eric);    stroke: var(--c-eric); }
+@keyframes ripple-out {
+  0%   { opacity: 0.85; transform: scale(0.7); stroke-width: 3; }
+  60%  { opacity: 0.35; }
+  100% { opacity: 0;    transform: scale(2.4); stroke-width: 0.3; }
+}
+
 /* Orbs */
 .dash-orb-halo {
   opacity: 0.35;
@@ -1057,7 +1076,32 @@ body::after {
 .dash-orb-bal.negative { fill: #ffe2e8; }
 .dash-orb-bal.zero     { fill: rgba(255,255,255,0.65); }
 
-/* Lines (flowing dashes from debtor → creditor) */
+/* Tapered energy bar (debtor narrow → creditor wide) */
+.dash-bar {
+  opacity: 0.78;
+  filter: drop-shadow(0 0 14px currentColor);
+  animation: bar-pulse 2.6s ease-in-out infinite;
+}
+@keyframes bar-pulse {
+  0%, 100% { opacity: 0.58; }
+  50%      { opacity: 0.9; }
+}
+
+/* Tapered bar inner highlight (slim white line down the center to show flow direction) */
+.dash-line-flow {
+  stroke-linecap: round;
+  stroke-dasharray: 4 9;
+  stroke: rgba(255, 255, 255, 0.7);
+  animation: dash-flow 1.0s linear infinite;
+  filter: drop-shadow(0 0 3px white);
+  opacity: 0.7;
+  pointer-events: none;
+}
+@keyframes dash-flow {
+  to { stroke-dashoffset: -13; }
+}
+
+/* Legacy classes (kept harmless in case of cached SW) */
 .dash-line {
   stroke-linecap: round;
   stroke-dasharray: 5 11;
@@ -1065,20 +1109,10 @@ body::after {
   filter: drop-shadow(0 0 8px currentColor);
   opacity: 0.85;
 }
-@keyframes dash-flow {
-  to { stroke-dashoffset: -16; }
-}
-
-/* Underlying glow on lines */
 .dash-line-glow {
   stroke-linecap: round;
   opacity: 0.18;
   filter: blur(6px);
-  animation: line-glow-pulse 2.4s ease-in-out infinite;
-}
-@keyframes line-glow-pulse {
-  0%, 100% { opacity: 0.10; }
-  50%      { opacity: 0.30; }
 }
 
 /* Flowing particles along the line */

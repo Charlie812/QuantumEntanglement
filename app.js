@@ -656,6 +656,31 @@ function svgEl(tag, attrs = {}) {
   return el;
 }
 
+// Compute line endpoint at the EDGE of each orb (not center)
+function lineEndpoints(p1, p2, r1, r2) {
+  const dx = p2.x - p1.x, dy = p2.y - p1.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len, uy = dy / len;
+  return {
+    start: { x: p1.x + ux * r1, y: p1.y + uy * r1 },
+    end:   { x: p2.x - ux * r2, y: p2.y - uy * r2 },
+  };
+}
+
+// Tapered polygon from (x1,y1) to (x2,y2) with widths w1 → w2
+function taperPath(x1, y1, x2, y2, w1, w2) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const len = Math.hypot(dx, dy);
+  if (len === 0) return "";
+  // perpendicular unit vector
+  const ux = -dy / len, uy = dx / len;
+  const h1 = w1 / 2, h2 = w2 / 2;
+  return `M ${x1 + ux * h1} ${y1 + uy * h1} ` +
+         `L ${x2 + ux * h2} ${y2 + uy * h2} ` +
+         `L ${x2 - ux * h2} ${y2 - uy * h2} ` +
+         `L ${x1 - ux * h1} ${y1 - uy * h1} Z`;
+}
+
 function renderDashboard() {
   const r = computeSettlement(state.entries);
   const fabBadge = $("#fabBadge");
@@ -682,10 +707,21 @@ function renderDashboard() {
   // Empty state overlay on canvas
   $("#dashEmpty").classList.toggle("hidden", r.activeCount > 0);
 
+  // 計算 orb 半徑 — 正向 balance 越大、圓越大
+  const positives = PEOPLE.map((p) => Math.max(0, r.balances?.[p] || 0));
+  const maxPos = Math.max(...positives, 1);
+  const orbSizes = {};
+  for (let i = 0; i < PEOPLE.length; i++) {
+    const p = PEOPLE[i];
+    const ratio = maxPos === 0 ? 0.45 : positives[i] / maxPos;
+    // 18 ~ 50px core radius — 範圍夠大、視覺差很明顯
+    orbSizes[p] = 18 + Math.pow(ratio, 0.85) * 32;
+  }
+
   renderDashboardTerritory(r);
   renderDashboardStars();
-  renderDashboardOrbs(r);
-  renderDashboardLines(r);
+  renderDashboardLines(r, orbSizes);
+  renderDashboardOrbs(r, orbSizes);
   renderDashboardSummary(r);
 }
 
@@ -749,7 +785,7 @@ function renderDashboardStars() {
   }
 }
 
-function renderDashboardOrbs(r) {
+function renderDashboardOrbs(r, orbSizes) {
   const g = $("#dashOrbs");
   g.innerHTML = "";
 
@@ -762,19 +798,37 @@ function renderDashboardOrbs(r) {
     const pos = ORB_POSITIONS[p];
     const cls = PERSON_CLASS[p];
     const bal = r.balances?.[p] || 0;
+    const coreR = orbSizes[p];
+    const haloR = coreR * 1.65;
 
     const grp = svgEl("g", { transform: `translate(${pos.x}, ${pos.y})`, class: "dash-orb-g" });
 
-    // 光暈（呼吸 + scale）
-    grp.appendChild(svgEl("circle", { r: 54, class: `dash-orb-halo ${cls}` }));
-    // 軌道環（旋轉的虛線）
-    grp.appendChild(svgEl("circle", { r: 44, class: `dash-orb-ring ${cls}` }));
-    // 王者金環（只有最大正債權人有）
-    if (p === king) {
-      grp.appendChild(svgEl("circle", { r: 40, class: "dash-orb-king-ring" }));
+    // 光暈
+    grp.appendChild(svgEl("circle", { r: haloR, class: `dash-orb-halo ${cls}` }));
+
+    // 3 個 staggered 漣漪 (能量波)
+    for (let i = 0; i < 3; i++) {
+      grp.appendChild(svgEl("circle", {
+        r: coreR,
+        class: `dash-orb-ripple ${cls}`,
+        style: `animation-delay: ${i * 0.9}s`,
+      }));
     }
-    // 核心
-    grp.appendChild(svgEl("circle", { r: 32, class: `dash-orb-core ${cls}` }));
+
+    // 軌道環（旋轉的虛線）
+    grp.appendChild(svgEl("circle", { r: coreR + 9, class: `dash-orb-ring ${cls}` }));
+
+    // 王者金環（最大正債權人）
+    if (p === king) {
+      grp.appendChild(svgEl("circle", { r: coreR + 5, class: "dash-orb-king-ring" }));
+    }
+
+    // 核心 — 用 feTurbulence filter 抖動 = 能量波感
+    grp.appendChild(svgEl("circle", {
+      r: coreR,
+      class: `dash-orb-core ${cls}`,
+      filter: bal > 0 ? "url(#energy-strong)" : "url(#energy)",
+    }));
 
     const name = svgEl("text", { class: "dash-orb-name", y: -2 });
     name.textContent = p;
@@ -800,7 +854,7 @@ function renderDashboardOrbs(r) {
   }
 }
 
-function renderDashboardLines(r) {
+function renderDashboardLines(r, orbSizes) {
   const g = $("#dashLines");
   g.innerHTML = "";
   if (!r.transactions || r.transactions.length === 0) return;
@@ -808,41 +862,43 @@ function renderDashboardLines(r) {
   const colorVar = (p) => `var(--c-${PERSON_CLASS[p]})`;
   const maxAmt = Math.max(...r.transactions.map((t) => t.amount), 1);
 
-  for (let i = 0; i < r.transactions.length; i++) {
-    const tx = r.transactions[i];
-    const from = ORB_POSITIONS[tx.from];
-    const to = ORB_POSITIONS[tx.to];
+  for (const tx of r.transactions) {
+    const fromPos = ORB_POSITIONS[tx.from];
+    const toPos = ORB_POSITIONS[tx.to];
     const stroke = colorVar(tx.to);
-    // 戲劇化縮放：sqrt scale 讓小金額也看得到、大金額更突出
     const ratio = tx.amount / maxAmt;
-    const thickness = 3 + Math.pow(ratio, 0.55) * 19; // 3〜22px
 
-    // 0) 底層 glow（在線下面、blurred）
-    g.appendChild(svgEl("line", {
-      x1: from.x, y1: from.y, x2: to.x, y2: to.y,
-      stroke,
-      "stroke-width": thickness + 4,
-      class: "dash-line-glow",
+    // 端點縮到 orb 邊緣
+    const ep = lineEndpoints(fromPos, toPos, orbSizes[tx.from] - 2, orbSizes[tx.to] - 2);
+
+    // tapered widths — debtor 端窄、creditor 端寬（能量灌入感）
+    const w1 = 4 + Math.pow(ratio, 0.5) * 6;    // debtor: 4~10
+    const w2 = 10 + Math.pow(ratio, 0.5) * 28;  // creditor: 10~38
+
+    // 1) 能量棒（tapered polygon）
+    g.appendChild(svgEl("path", {
+      d: taperPath(ep.start.x, ep.start.y, ep.end.x, ep.end.y, w1, w2),
+      fill: stroke,
+      class: "dash-bar",
       style: `color:${stroke};`,
     }));
 
-    // 1) flowing dashed line debtor → creditor
+    // 2) 中軸的白色虛線 — 顯示流動方向
     g.appendChild(svgEl("line", {
-      x1: from.x, y1: from.y, x2: to.x, y2: to.y,
-      stroke,
-      "stroke-width": thickness,
-      class: "dash-line",
-      style: `color:${stroke};`,
+      x1: ep.start.x, y1: ep.start.y,
+      x2: ep.end.x, y2: ep.end.y,
+      "stroke-width": Math.max(1.4, Math.min(w1, w2) * 0.35),
+      class: "dash-line-flow",
     }));
 
-    // 2) 多顆 flowing particles（金額越大、顆數越多、staggered）
-    const particleCount = Math.max(2, Math.round(2 + ratio * 3)); // 2〜5
-    const dur = 2.4 - ratio * 0.8; // 金額越大流越快（2.4s〜1.6s）
+    // 3) flowing particles（金額越大、顆數越多 + 越快、粒子越大）
+    const particleCount = Math.max(3, Math.round(3 + ratio * 4)); // 3~7
+    const dur = 2.2 - ratio * 0.9;
     for (let k = 0; k < particleCount; k++) {
-      const pr = Math.max(2.5, thickness * 0.42);
+      const pr = Math.max(3, w2 * 0.20);
       const particle = svgEl("circle", {
         r: pr,
-        fill: stroke,
+        fill: "white",
         class: "dash-particle",
         style: `color:${stroke};`,
       });
@@ -850,16 +906,16 @@ function renderDashboardLines(r) {
         dur: dur + "s",
         repeatCount: "indefinite",
         begin: `${(k * dur) / particleCount}s`,
-        path: `M ${from.x} ${from.y} L ${to.x} ${to.y}`,
+        path: `M ${ep.start.x} ${ep.start.y} L ${ep.end.x} ${ep.end.y}`,
         rotate: "auto",
       });
       particle.appendChild(motion);
       g.appendChild(particle);
     }
 
-    // 3) amount label at midpoint
-    const midX = (from.x + to.x) / 2;
-    const midY = (from.y + to.y) / 2;
+    // 4) 金額 pill at midpoint
+    const midX = (ep.start.x + ep.end.x) / 2;
+    const midY = (ep.start.y + ep.end.y) / 2;
     const lblText = `$${tx.amount.toLocaleString("en-US")}`;
     const lblWidth = Math.max(54, lblText.length * 9 + 14);
     const lblG = svgEl("g", { transform: `translate(${midX}, ${midY})` });
