@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0">
+  <meta name="theme-color" content="#0a0a14">
+  <meta name="color-scheme" content="dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="量子糾纏">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
+  <title>量子糾纏</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<div id="app">
+
+  <header class="topbar">
+    <h1 class="brand">
+      <span class="brand-dot brand-dot-a"></span>
+      <span class="brand-text">量子糾纏</span>
+      <span class="brand-dot brand-dot-b"></span>
+    </h1>
+    <div class="topbar-right">
+      <span class="status-dot" id="connStatus" title="連線狀態"></span>
+      <button class="icon-btn" id="historyToggle" aria-label="切換歷史/主畫面">
+        <span class="icon-bars">
+          <span></span><span></span><span></span>
+        </span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ========= MAIN VIEW ========= -->
+  <main id="mainView" class="view">
+
+    <!-- Row 1: 我是誰 -->
+    <section class="row">
+      <div class="row-label">我是誰?</div>
+      <div class="person-picker" data-target="me">
+        <button type="button" class="person-btn" data-person="Charlie">
+          <span class="person-name">Charlie</span>
+        </button>
+        <button type="button" class="person-btn" data-person="偉賢">
+          <span class="person-name">偉賢</span>
+        </button>
+        <button type="button" class="person-btn" data-person="Eric">
+          <span class="person-name">Eric</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Row 2: 金額 -->
+    <section class="row">
+      <div class="row-label">金額</div>
+      <div class="amount-display">
+        <span class="currency">NT$</span>
+        <span class="amount-value" id="amountValue">0</span>
+      </div>
+      <div class="keypad" id="keypad">
+        <button type="button" class="key" data-key="7">7</button>
+        <button type="button" class="key" data-key="8">8</button>
+        <button type="button" class="key" data-key="9">9</button>
+        <button type="button" class="key" data-key="4">4</button>
+        <button type="button" class="key" data-key="5">5</button>
+        <button type="button" class="key" data-key="6">6</button>
+        <button type="button" class="key" data-key="1">1</button>
+        <button type="button" class="key" data-key="2">2</button>
+        <button type="button" class="key" data-key="3">3</button>
+        <button type="button" class="key key-zero" data-key="0">0</button>
+        <button type="button" class="key key-back" data-key="back" aria-label="退一位">⌫</button>
+        <button type="button" class="key key-clear" data-key="clear" aria-label="清除">C</button>
+      </div>
+    </section>
+
+    <!-- Row 3: 我欠誰 -->
+    <section class="row">
+      <div class="row-label">我欠誰?</div>
+      <div class="person-picker person-picker-other" data-target="other" id="otherPicker">
+        <button type="button" class="person-btn" data-person="Charlie">
+          <span class="person-name">Charlie</span>
+        </button>
+        <button type="button" class="person-btn" data-person="偉賢">
+          <span class="person-name">偉賢</span>
+        </button>
+        <button type="button" class="person-btn" data-person="Eric">
+          <span class="person-name">Eric</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Row 4: 備註 -->
+    <section class="row">
+      <div class="row-label">備註 <span class="muted">(可選)</span></div>
+      <input
+        type="text"
+        id="noteInput"
+        class="note-input"
+        placeholder="午餐、計程車、買水..."
+        maxlength="40"
+        autocomplete="off"
+        autocapitalize="off"
+        spellcheck="false">
+    </section>
+
+    <!-- Submit -->
+    <button type="button" class="primary-btn" id="submitBtn" disabled>
+      <span class="primary-btn-text">新增記錄</span>
+    </button>
+
+    <!-- Records list -->
+    <section class="records">
+      <div class="records-head">
+        <h2>未結算糾纏</h2>
+        <span class="count-pill" id="entryCount">0</span>
+      </div>
+      <ul class="entries-list" id="entriesList"></ul>
+      <p class="empty" id="entriesEmpty">目前還沒有任何糾纏 ✨</p>
+    </section>
+
+    <!-- spacer for sticky settle bar -->
+    <div class="bottom-spacer"></div>
+  </main>
+
+  <!-- ========= HISTORY VIEW ========= -->
+  <main id="historyView" class="view hidden">
+    <section class="records">
+      <div class="records-head">
+        <h2>結帳歷史</h2>
+      </div>
+      <ul class="settlements-list" id="settlementsList"></ul>
+      <p class="empty" id="settlementsEmpty">還沒有結過帳</p>
+    </section>
+    <div class="bottom-spacer"></div>
+  </main>
+
+  <!-- Sticky settle bar -->
+  <div class="bottom-bar" id="bottomBar">
+    <button type="button" class="settle-btn" id="settleBtn">
+      <span class="settle-icon">💰</span>
+      <span class="settle-text">結帳</span>
+      <span class="settle-meta" id="settleMeta"></span>
+    </button>
+  </div>
+
+</div>
+
+<!-- ========= SETTLE MODAL ========= -->
+<div class="modal-backdrop hidden" id="settleModal" role="dialog" aria-modal="true">
+  <div class="modal">
+    <h2 class="modal-title">結帳</h2>
+    <p class="modal-sub" id="settleSub">目前未結算的糾纏</p>
+
+    <div class="balance-block">
+      <div class="block-label">每人淨額</div>
+      <ul class="balances" id="settleBalances"></ul>
+    </div>
+
+    <div class="tx-block">
+      <div class="block-label">最少轉帳次數</div>
+      <ul class="txs" id="settleTxs"></ul>
+    </div>
+
+    <div class="modal-actions">
+      <button type="button" class="secondary-btn" id="settleCancel">取消</button>
+      <button type="button" class="primary-btn" id="settleConfirm">確定結帳並封存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========= DELETE CONFIRM MODAL ========= -->
+<div class="modal-backdrop hidden" id="deleteModal" role="dialog" aria-modal="true">
+  <div class="modal">
+    <h2 class="modal-title">刪除這筆糾纏?</h2>
+    <p class="modal-sub" id="deletePreview"></p>
+    <div class="modal-actions">
+      <button type="button" class="secondary-btn" id="deleteCancel">取消</button>
+      <button type="button" class="danger-btn" id="deleteConfirm">刪除</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========= TOAST ========= -->
+<div class="toast hidden" id="toast"></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
