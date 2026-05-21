@@ -63,19 +63,27 @@
         <span class="currency">NT$</span>
         <span class="amount-value" id="amountValue">0</span>
       </div>
-      <div class="keypad" id="keypad">
+      <div class="amount-preview hidden" id="amountPreview"></div>
+      <div class="keypad keypad-4col" id="keypad">
         <button type="button" class="key" data-key="7">7</button>
         <button type="button" class="key" data-key="8">8</button>
         <button type="button" class="key" data-key="9">9</button>
+        <button type="button" class="key key-op" data-key="÷">÷</button>
+
         <button type="button" class="key" data-key="4">4</button>
         <button type="button" class="key" data-key="5">5</button>
         <button type="button" class="key" data-key="6">6</button>
+        <button type="button" class="key key-op" data-key="×">×</button>
+
         <button type="button" class="key" data-key="1">1</button>
         <button type="button" class="key" data-key="2">2</button>
         <button type="button" class="key" data-key="3">3</button>
-        <button type="button" class="key key-zero" data-key="0">0</button>
+        <button type="button" class="key key-op" data-key="−">−</button>
+
+        <button type="button" class="key" data-key="0">0</button>
         <button type="button" class="key key-back" data-key="back" aria-label="退一位">⌫</button>
         <button type="button" class="key key-clear" data-key="clear" aria-label="清除">C</button>
+        <button type="button" class="key key-op" data-key="+">+</button>
       </div>
     </section>
 
@@ -139,7 +147,8 @@
   <!-- ========= HISTORY VIEW ========= -->
   <main id="historyView" class="view hidden">
     <div class="tabs" id="historyTabs">
-      <button type="button" class="tab active" data-tab="unsettled">未結帳記錄</button>
+      <button type="button" class="tab active" data-tab="unsettled">未結帳</button>
+      <button type="button" class="tab" data-tab="deleted">已刪除</button>
       <button type="button" class="tab" data-tab="settlements">結帳歷史</button>
     </div>
 
@@ -150,6 +159,15 @@
       </div>
       <ul class="entries-list" id="historyEntriesList"></ul>
       <p class="empty" id="historyEntriesEmpty">目前沒有未結帳的糾纏</p>
+    </section>
+
+    <section class="tab-content hidden" id="tabDeleted">
+      <div class="records-head">
+        <h2>已刪除的糾纏</h2>
+        <span class="count-pill" id="histDeletedCount">0</span>
+      </div>
+      <ul class="entries-list" id="deletedEntriesList"></ul>
+      <p class="empty" id="deletedEntriesEmpty">沒有刪除過任何記錄</p>
     </section>
 
     <section class="tab-content hidden" id="tabSettlements">
@@ -228,7 +246,24 @@
           <filter id="dash-blur" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur stdDeviation="8"/>
           </filter>
+          <radialGradient id="terr-charlie" cx="50%" cy="50%" r="50%">
+            <stop offset="0%"   stop-color="#00e5ff" stop-opacity="0.65"/>
+            <stop offset="55%"  stop-color="#00e5ff" stop-opacity="0.18"/>
+            <stop offset="100%" stop-color="#00e5ff" stop-opacity="0"/>
+          </radialGradient>
+          <radialGradient id="terr-weixian" cx="50%" cy="50%" r="50%">
+            <stop offset="0%"   stop-color="#ff5ec4" stop-opacity="0.65"/>
+            <stop offset="55%"  stop-color="#ff5ec4" stop-opacity="0.18"/>
+            <stop offset="100%" stop-color="#ff5ec4" stop-opacity="0"/>
+          </radialGradient>
+          <radialGradient id="terr-eric" cx="50%" cy="50%" r="50%">
+            <stop offset="0%"   stop-color="#ffd24a" stop-opacity="0.7"/>
+            <stop offset="55%"  stop-color="#ffd24a" stop-opacity="0.2"/>
+            <stop offset="100%" stop-color="#ffd24a" stop-opacity="0"/>
+          </radialGradient>
         </defs>
+        <g id="dashTerritory" class="dash-territory-group"></g>
+        <g id="dashStars" class="dash-stars-group"></g>
         <g id="dashLines" class="dash-lines-group"></g>
         <g id="dashOrbs" class="dash-orbs-group"></g>
       </svg>

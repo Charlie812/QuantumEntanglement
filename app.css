@@ -305,14 +305,29 @@ body::after {
   font-weight: 500;
 }
 .amount-value {
-  font-size: 44px;
+  font-size: clamp(28px, 8vw, 44px);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: -1px;
   color: var(--text-1);
   font-feature-settings: "tnum";
+  word-break: break-all;
+  max-width: 100%;
 }
 .amount-value.zero { color: var(--text-3); }
+
+.amount-preview {
+  text-align: center;
+  font-size: 14px;
+  color: var(--c-accent);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  margin: -8px 0 8px;
+  letter-spacing: 1px;
+  animation: fade-in 0.18s ease;
+}
+.amount-preview.error { color: var(--c-danger); }
+.amount-preview.hidden { display: none; }
 
 /* ========== Keypad ========== */
 .keypad {
@@ -320,8 +335,11 @@ body::after {
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
+.keypad-4col {
+  grid-template-columns: repeat(4, 1fr);
+}
 .key {
-  height: 54px;
+  height: 52px;
   border-radius: var(--radius-md);
   background: var(--bg-2);
   border: 1px solid var(--line);
@@ -341,6 +359,17 @@ body::after {
 }
 .key-back { background: var(--bg-1); }
 .key-clear { background: var(--bg-1); color: var(--c-danger); }
+
+.key-op {
+  background: linear-gradient(180deg, rgba(139,108,255,0.18), rgba(139,108,255,0.06));
+  color: var(--c-accent);
+  font-weight: 700;
+  font-size: 24px;
+  border-color: rgba(139,108,255,0.35);
+}
+.key-op:active {
+  background: linear-gradient(180deg, rgba(139,108,255,0.28), rgba(139,108,255,0.12));
+}
 
 /* ========== Note input ========== */
 .note-input {
@@ -429,6 +458,20 @@ body::after {
   position: relative;
 }
 .entry.deleting { transform: scale(0.95); opacity: 0.4; }
+
+.entry-deleted {
+  opacity: 0.55;
+  background: var(--bg-2);
+}
+.entry-deleted .entry-person,
+.entry-deleted .entry-amount {
+  text-decoration: line-through;
+  text-decoration-color: rgba(255, 255, 255, 0.4);
+  text-decoration-thickness: 1.5px;
+}
+.entry-deleted .entry-arrow { opacity: 0.5; }
+.entry-deleted .entry-sub { color: var(--c-danger); opacity: 0.8; }
+.entry-deleted .entry-note { text-decoration: line-through; opacity: 0.7; }
 .entry-flow {
   display: flex;
   align-items: center;
@@ -741,6 +784,14 @@ body::after {
   transform: scale(0.93);
 }
 .dash-fab.hidden { display: none !important; }
+.dash-fab.dragging {
+  animation: none !important;
+  cursor: grabbing;
+  transform: scale(1.08);
+  box-shadow: 0 16px 40px rgba(139, 108, 255, 0.7), inset 0 0 0 2px rgba(255, 255, 255, 0.15);
+  touch-action: none;
+}
+.dash-fab { touch-action: none; }
 
 @keyframes fab-float {
   0%, 100% { transform: translateY(0); box-shadow: 0 8px 28px rgba(139,108,255,0.45), inset 0 0 0 1px rgba(255,255,255,0.06); }
@@ -798,9 +849,9 @@ body::after {
   position: fixed;
   inset: 0;
   z-index: 110;
-  background: rgba(2, 2, 8, 0.75);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: rgba(2, 2, 8, 0.45);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -815,15 +866,33 @@ body::after {
   display: flex;
   flex-direction: column;
   background:
-    radial-gradient(circle at 0% 0%, rgba(0,229,255,0.07), transparent 50%),
-    radial-gradient(circle at 100% 100%, rgba(255,94,196,0.07), transparent 50%),
-    var(--bg-1);
-  border: 1px solid var(--line);
+    radial-gradient(circle at 0% 0%, rgba(0,229,255,0.10), transparent 50%),
+    radial-gradient(circle at 100% 100%, rgba(255,94,196,0.10), transparent 50%),
+    rgba(14, 14, 26, 0.62);
+  backdrop-filter: blur(28px) saturate(1.4);
+  -webkit-backdrop-filter: blur(28px) saturate(1.4);
+  border: 1px solid rgba(139, 108, 255, 0.22);
   border-radius: var(--radius-lg);
   padding: 22px 18px 20px;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
-  animation: dash-pop 0.32s cubic-bezier(0.18, 0.9, 0.3, 1.05);
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.55),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  animation: dash-pop 0.38s cubic-bezier(0.18, 0.9, 0.3, 1.05);
   overflow: hidden;
+}
+.dash-modal::before {
+  content: "";
+  position: absolute;
+  inset: -50%;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(0,229,255,0.05), transparent 25%),
+    radial-gradient(circle at 70% 80%, rgba(255,94,196,0.05), transparent 25%),
+    radial-gradient(circle at 50% 50%, rgba(255,210,74,0.04), transparent 30%);
+  pointer-events: none;
+  animation: dash-rotate 60s linear infinite;
+}
+@keyframes dash-rotate {
+  to { transform: rotate(360deg); }
 }
 @keyframes dash-pop {
   from { transform: scale(0.88) translateY(20px); opacity: 0; }
@@ -882,30 +951,91 @@ body::after {
   display: block;
 }
 
+/* Territory background (force field per person) */
+.dash-territory {
+  mix-blend-mode: screen;
+  animation: territory-breathe 5s ease-in-out infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+.dash-territory.charlie { animation-delay: 0s; }
+.dash-territory.weixian { animation-delay: 1.6s; }
+.dash-territory.eric    { animation-delay: 3.2s; }
+@keyframes territory-breathe {
+  0%, 100% { transform: scale(1); opacity: 0.92; }
+  50%      { transform: scale(1.08); opacity: 1; }
+}
+
+/* Background stars / energy specks */
+.dash-star {
+  fill: rgba(255, 255, 255, 0.6);
+  animation: star-twinkle 3s ease-in-out infinite;
+}
+@keyframes star-twinkle {
+  0%, 100% { opacity: 0.2; }
+  50%      { opacity: 0.9; }
+}
+
 /* Orbs */
 .dash-orb-halo {
   opacity: 0.35;
   animation: orb-halo 3.6s ease-in-out infinite;
+  transform-origin: center;
+  transform-box: fill-box;
 }
 .dash-orb-halo.charlie { fill: var(--c-charlie); animation-delay: 0s; }
 .dash-orb-halo.weixian { fill: var(--c-weixian); animation-delay: 0.6s; }
 .dash-orb-halo.eric    { fill: var(--c-eric);    animation-delay: 1.2s; }
 @keyframes orb-halo {
-  0%, 100% { opacity: 0.22; }
-  50%      { opacity: 0.48; }
+  0%, 100% { opacity: 0.20; transform: scale(0.95); }
+  50%      { opacity: 0.55; transform: scale(1.18); }
+}
+
+/* Orbital ring around each orb (rotating) */
+.dash-orb-ring {
+  fill: none;
+  stroke-width: 1.2;
+  stroke-dasharray: 3 6;
+  opacity: 0.6;
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: orb-ring-spin 12s linear infinite;
+}
+.dash-orb-ring.charlie { stroke: var(--c-charlie); animation-delay: 0s; }
+.dash-orb-ring.weixian { stroke: var(--c-weixian); animation-delay: -4s; animation-direction: reverse; }
+.dash-orb-ring.eric    { stroke: var(--c-eric);    animation-delay: -8s; }
+@keyframes orb-ring-spin {
+  to { transform: rotate(360deg); }
 }
 
 .dash-orb-core {
   transform-origin: center;
   transform-box: fill-box;
   animation: orb-pulse 3.6s ease-in-out infinite;
+  filter: drop-shadow(0 0 8px currentColor);
 }
-.dash-orb-core.charlie { fill: var(--c-charlie); animation-delay: 0s; }
-.dash-orb-core.weixian { fill: var(--c-weixian); animation-delay: 0.6s; }
-.dash-orb-core.eric    { fill: var(--c-eric);    animation-delay: 1.2s; }
+.dash-orb-core.charlie { fill: var(--c-charlie); color: var(--c-charlie); animation-delay: 0s; }
+.dash-orb-core.weixian { fill: var(--c-weixian); color: var(--c-weixian); animation-delay: 0.6s; }
+.dash-orb-core.eric    { fill: var(--c-eric);    color: var(--c-eric);    animation-delay: 1.2s; }
 @keyframes orb-pulse {
   0%, 100% { transform: scale(1); }
-  50%      { transform: scale(1.06); }
+  50%      { transform: scale(1.08); }
+}
+
+/* "King of debt" highlight — the most-owed person gets a crown ring */
+.dash-orb-king-ring {
+  fill: none;
+  stroke: gold;
+  stroke-width: 2;
+  stroke-dasharray: 4 4;
+  opacity: 0.9;
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: king-spin 8s linear infinite;
+  filter: drop-shadow(0 0 6px gold);
+}
+@keyframes king-spin {
+  to { transform: rotate(-360deg); }
 }
 
 .dash-orb-name {
@@ -930,17 +1060,30 @@ body::after {
 /* Lines (flowing dashes from debtor → creditor) */
 .dash-line {
   stroke-linecap: round;
-  stroke-dasharray: 5 9;
-  animation: dash-flow 1.4s linear infinite;
-  filter: drop-shadow(0 0 6px currentColor);
+  stroke-dasharray: 5 11;
+  animation: dash-flow 1.2s linear infinite;
+  filter: drop-shadow(0 0 8px currentColor);
+  opacity: 0.85;
 }
 @keyframes dash-flow {
-  to { stroke-dashoffset: -14; }
+  to { stroke-dashoffset: -16; }
+}
+
+/* Underlying glow on lines */
+.dash-line-glow {
+  stroke-linecap: round;
+  opacity: 0.18;
+  filter: blur(6px);
+  animation: line-glow-pulse 2.4s ease-in-out infinite;
+}
+@keyframes line-glow-pulse {
+  0%, 100% { opacity: 0.10; }
+  50%      { opacity: 0.30; }
 }
 
 /* Flowing particles along the line */
 .dash-particle {
-  filter: drop-shadow(0 0 6px currentColor);
+  filter: drop-shadow(0 0 8px currentColor);
 }
 
 /* Amount label on lines */

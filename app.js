@@ -32,6 +32,7 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const LS_ME = "qe.me";
 const LS_LOCAL_ENTRIES = "qe.local.entries";
 const LS_LOCAL_SETTLEMENTS = "qe.local.settlements";
+const LS_FAB_POS = "qe.fab.pos";
 
 const FIREBASE_READY =
   firebaseConfig &&
@@ -217,14 +218,66 @@ const backend = FIREBASE_READY ? createFirestoreBackend() : createLocalBackend()
 const state = {
   me: null,
   other: null,
-  amount: 0,
+  expression: "",               // raw input string e.g. "100+50×3" — evaluated at submit
   note: "",
   entries: [],
   settlements: [],
   view: "main",                 // "main" | "history"
-  historyTab: "unsettled",      // "unsettled" | "settlements"
+  historyTab: "unsettled",      // "unsettled" | "deleted" | "settlements"
   pendingDeleteId: null,
 };
+
+// ====================================================================
+// Safe expression evaluator — only digits + - × ÷ (no parens)
+// Returns rounded integer; throws if invalid.
+// ====================================================================
+function evalExpression(raw) {
+  if (!raw) throw new Error("empty");
+  // Tokenize
+  const tokens = [];
+  let num = "";
+  for (const ch of raw) {
+    if (/\d/.test(ch)) {
+      num += ch;
+    } else if ("+-−*×/÷".includes(ch)) {
+      if (!num) throw new Error("bad");
+      tokens.push(parseInt(num, 10));
+      tokens.push(ch === "×" || ch === "*" ? "*" : ch === "÷" || ch === "/" ? "/" : ch === "−" ? "-" : ch);
+      num = "";
+    } else {
+      throw new Error("bad");
+    }
+  }
+  if (!num) throw new Error("trailing op");
+  tokens.push(parseInt(num, 10));
+  // Pass 1: × ÷
+  let i = 1;
+  while (i < tokens.length) {
+    const op = tokens[i];
+    if (op === "*" || op === "/") {
+      const a = tokens[i - 1];
+      const b = tokens[i + 1];
+      const r = op === "*" ? a * b : (b === 0 ? NaN : a / b);
+      tokens.splice(i - 1, 3, r);
+    } else {
+      i += 2;
+    }
+  }
+  // Pass 2: + −
+  let result = tokens[0];
+  for (let j = 1; j < tokens.length; j += 2) {
+    const op = tokens[j];
+    const v = tokens[j + 1];
+    if (op === "+") result += v;
+    else if (op === "-") result -= v;
+  }
+  if (!Number.isFinite(result)) throw new Error("non-finite");
+  return Math.round(result);
+}
+
+function exprHasOperator(s) {
+  return /[+\-−*×/÷]/.test(s);
+}
 
 // ====================================================================
 // DOM helpers
@@ -332,6 +385,7 @@ function render() {
   renderEntries();
   renderSettleBar();
   renderHistoryEntries();
+  renderDeletedEntries();
   renderHistory();
   renderViewToggle();
   renderHistoryTabs();
@@ -354,16 +408,41 @@ function renderPickers() {
 
 function renderAmount() {
   const el = $("#amountValue");
-  el.textContent = state.amount.toLocaleString("en-US");
-  el.classList.toggle("zero", state.amount === 0);
+  const expr = state.expression;
+  el.textContent = expr === "" ? "0" : expr;
+  el.classList.toggle("zero", expr === "");
+
+  const preview = $("#amountPreview");
+  if (expr === "" || !exprHasOperator(expr)) {
+    preview.classList.add("hidden");
+    preview.textContent = "";
+    return;
+  }
+  try {
+    const v = evalExpression(expr);
+    if (v > 0) {
+      preview.textContent = "= NT$" + v.toLocaleString("en-US");
+      preview.classList.remove("hidden", "error");
+    } else {
+      preview.textContent = "= " + v.toLocaleString("en-US") + " (要 > 0)";
+      preview.classList.remove("hidden");
+      preview.classList.add("error");
+    }
+  } catch {
+    // partial expression like "100+" — show ellipsis, not error
+    preview.textContent = "= …";
+    preview.classList.remove("hidden", "error");
+  }
 }
 
 function renderSubmit() {
+  let amount = 0;
+  try { amount = evalExpression(state.expression); } catch { amount = 0; }
   const valid =
     state.me &&
     state.other &&
     state.me !== state.other &&
-    state.amount > 0;
+    amount > 0;
   $("#submitBtn").disabled = !valid;
 }
 
@@ -394,7 +473,7 @@ function fillEntryList(listEl, emptyEl, entries) {
 
 function buildEntryEl(e) {
   const li = document.createElement("li");
-  li.className = "entry entry-card";
+  li.className = "entry entry-card" + (e.deleted ? " entry-deleted" : "");
   li.dataset.id = e.id;
 
   const flow = document.createElement("div");
@@ -419,8 +498,13 @@ function buildEntryEl(e) {
   amount.textContent = "$" + e.amount.toLocaleString("en-US");
   const sub = document.createElement("span");
   sub.className = "entry-sub";
-  sub.textContent = relTime(tsToMs(e.createdAt));
-  sub.title = fullTime(tsToMs(e.createdAt));
+  if (e.deleted) {
+    sub.textContent = "已刪除 " + relTime(tsToMs(e.deletedAt));
+    sub.title = "刪除時間：" + fullTime(tsToMs(e.deletedAt)) + " / 原建立：" + fullTime(tsToMs(e.createdAt));
+  } else {
+    sub.textContent = relTime(tsToMs(e.createdAt));
+    sub.title = fullTime(tsToMs(e.createdAt));
+  }
   meta.append(amount, sub);
 
   const top = document.createElement("div");
@@ -439,8 +523,17 @@ function buildEntryEl(e) {
     li.append(noteEl);
   }
 
-  attachLongPress(li, e.id, e);
+  // 只有非刪除的才能再被刪除
+  if (!e.deleted) attachLongPress(li, e.id, e);
   return li;
+}
+
+function renderDeletedEntries() {
+  const deleted = state.entries
+    .filter((e) => e.deleted)
+    .sort((a, b) => tsToMs(b.deletedAt) - tsToMs(a.deletedAt));
+  $("#histDeletedCount").textContent = deleted.length;
+  fillEntryList($("#deletedEntriesList"), $("#deletedEntriesEmpty"), deleted);
 }
 
 function renderSettleBar() {
@@ -523,6 +616,7 @@ function renderHistoryTabs() {
     btn.classList.toggle("active", btn.dataset.tab === state.historyTab);
   });
   $("#tabUnsettled").classList.toggle("hidden", state.historyTab !== "unsettled");
+  $("#tabDeleted").classList.toggle("hidden", state.historyTab !== "deleted");
   $("#tabSettlements").classList.toggle("hidden", state.historyTab !== "settlements");
 }
 
@@ -562,14 +656,82 @@ function renderDashboard() {
   // Empty state overlay on canvas
   $("#dashEmpty").classList.toggle("hidden", r.activeCount > 0);
 
+  renderDashboardTerritory(r);
+  renderDashboardStars();
   renderDashboardOrbs(r);
   renderDashboardLines(r);
   renderDashboardSummary(r);
 }
 
+// 勢力板塊背景 — 各人正向 net balance 越大、自己那一邊的光暈越大
+function renderDashboardTerritory(r) {
+  const g = $("#dashTerritory");
+  g.innerHTML = "";
+
+  const positives = PEOPLE.map((p) => Math.max(0, r.balances?.[p] || 0));
+  const maxPos = Math.max(...positives, 1);
+  const totalPos = positives.reduce((a, b) => a + b, 0);
+
+  for (let i = 0; i < PEOPLE.length; i++) {
+    const p = PEOPLE[i];
+    const pos = ORB_POSITIONS[p];
+    const positive = positives[i];
+    // 半徑：正向值越大、輻射越廣。最小保留一點光暈、最大幾乎佔整個 canvas
+    const ratio = totalPos === 0 ? 0.18 : 0.18 + (positive / maxPos) * 0.55;
+    const r_pct = ratio * 360;
+    const cls = PERSON_CLASS[p];
+    const circle = svgEl("circle", {
+      cx: pos.x,
+      cy: pos.y,
+      r: r_pct,
+      fill: `url(#terr-${cls})`,
+      class: `dash-territory ${cls}`,
+    });
+    g.appendChild(circle);
+  }
+}
+
+// 背景星星 — 給夜空感
+const DASH_STARS = (() => {
+  // deterministic positions（避免每次 render 重新洗牌讓動畫亂跳）
+  const pts = [];
+  let seed = 42;
+  const rand = () => {
+    seed = (seed * 9301 + 49297) % 233280;
+    return seed / 233280;
+  };
+  for (let i = 0; i < 36; i++) {
+    pts.push({
+      x: 20 + rand() * 320,
+      y: 20 + rand() * 320,
+      r: 0.8 + rand() * 1.4,
+      delay: rand() * 3,
+      dur: 2 + rand() * 3,
+    });
+  }
+  return pts;
+})();
+function renderDashboardStars() {
+  const g = $("#dashStars");
+  if (g.children.length > 0) return; // 只渲染一次、不要每次更新都重新建
+  for (const s of DASH_STARS) {
+    g.appendChild(svgEl("circle", {
+      cx: s.x, cy: s.y, r: s.r,
+      class: "dash-star",
+      style: `animation-delay:${s.delay}s; animation-duration:${s.dur}s;`,
+    }));
+  }
+}
+
 function renderDashboardOrbs(r) {
   const g = $("#dashOrbs");
   g.innerHTML = "";
+
+  // 找出「最大債權人」（balance 正最高的）— 給他王者金環
+  const balances = PEOPLE.map((p) => ({ p, v: r.balances?.[p] || 0 }));
+  const kingEntry = balances.filter((b) => b.v > 0).sort((a, b) => b.v - a.v)[0];
+  const king = kingEntry?.p;
+
   for (const p of PEOPLE) {
     const pos = ORB_POSITIONS[p];
     const cls = PERSON_CLASS[p];
@@ -577,8 +739,16 @@ function renderDashboardOrbs(r) {
 
     const grp = svgEl("g", { transform: `translate(${pos.x}, ${pos.y})`, class: "dash-orb-g" });
 
-    grp.appendChild(svgEl("circle", { r: 52, class: `dash-orb-halo ${cls}` }));
-    grp.appendChild(svgEl("circle", { r: 34, class: `dash-orb-core ${cls}` }));
+    // 光暈（呼吸 + scale）
+    grp.appendChild(svgEl("circle", { r: 54, class: `dash-orb-halo ${cls}` }));
+    // 軌道環（旋轉的虛線）
+    grp.appendChild(svgEl("circle", { r: 44, class: `dash-orb-ring ${cls}` }));
+    // 王者金環（只有最大正債權人有）
+    if (p === king) {
+      grp.appendChild(svgEl("circle", { r: 40, class: "dash-orb-king-ring" }));
+    }
+    // 核心
+    grp.appendChild(svgEl("circle", { r: 32, class: `dash-orb-core ${cls}` }));
 
     const name = svgEl("text", { class: "dash-orb-name", y: -2 });
     name.textContent = p;
@@ -617,7 +787,18 @@ function renderDashboardLines(r) {
     const from = ORB_POSITIONS[tx.from];
     const to = ORB_POSITIONS[tx.to];
     const stroke = colorVar(tx.to);
-    const thickness = 4 + (tx.amount / maxAmt) * 9;
+    // 戲劇化縮放：sqrt scale 讓小金額也看得到、大金額更突出
+    const ratio = tx.amount / maxAmt;
+    const thickness = 3 + Math.pow(ratio, 0.55) * 19; // 3〜22px
+
+    // 0) 底層 glow（在線下面、blurred）
+    g.appendChild(svgEl("line", {
+      x1: from.x, y1: from.y, x2: to.x, y2: to.y,
+      stroke,
+      "stroke-width": thickness + 4,
+      class: "dash-line-glow",
+      style: `color:${stroke};`,
+    }));
 
     // 1) flowing dashed line debtor → creditor
     g.appendChild(svgEl("line", {
@@ -628,18 +809,21 @@ function renderDashboardLines(r) {
       style: `color:${stroke};`,
     }));
 
-    // 2) two flowing particles along the same path (staggered)
-    for (let k = 0; k < 2; k++) {
+    // 2) 多顆 flowing particles（金額越大、顆數越多、staggered）
+    const particleCount = Math.max(2, Math.round(2 + ratio * 3)); // 2〜5
+    const dur = 2.4 - ratio * 0.8; // 金額越大流越快（2.4s〜1.6s）
+    for (let k = 0; k < particleCount; k++) {
+      const pr = Math.max(2.5, thickness * 0.42);
       const particle = svgEl("circle", {
-        r: Math.max(3, thickness * 0.45),
+        r: pr,
         fill: stroke,
         class: "dash-particle",
         style: `color:${stroke};`,
       });
       const motion = svgEl("animateMotion", {
-        dur: "2.4s",
+        dur: dur + "s",
         repeatCount: "indefinite",
-        begin: `${k * 1.2}s`,
+        begin: `${(k * dur) / particleCount}s`,
         path: `M ${from.x} ${from.y} L ${to.x} ${to.y}`,
         rotate: "auto",
       });
@@ -705,6 +889,144 @@ function openDashboard() {
 }
 function closeDashboard() {
   $("#dashOverlay").classList.add("hidden");
+}
+
+// ====================================================================
+// FAB: drag + click
+// ====================================================================
+
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+function loadFabPos() {
+  try {
+    const s = localStorage.getItem(LS_FAB_POS);
+    if (!s) return null;
+    const o = JSON.parse(s);
+    if (typeof o?.left === "number" && typeof o?.top === "number") return o;
+  } catch {}
+  return null;
+}
+function saveFabPos(left, top) {
+  localStorage.setItem(LS_FAB_POS, JSON.stringify({ left, top }));
+}
+
+function applyFabPos(fab, left, top) {
+  const margin = 8;
+  const fabSize = 60;
+  const maxLeft = window.innerWidth - fabSize - margin;
+  const maxTop = window.innerHeight - fabSize - margin;
+  left = clamp(left, margin, Math.max(margin, maxLeft));
+  top = clamp(top, margin, Math.max(margin, maxTop));
+  fab.style.left = left + "px";
+  fab.style.top = top + "px";
+  fab.style.right = "auto";
+  fab.style.bottom = "auto";
+  return { left, top };
+}
+
+function bindFabDrag() {
+  const fab = $("#dashFab");
+  if (!fab) return;
+
+  // 還原上次位置
+  const saved = loadFabPos();
+  if (saved) applyFabPos(fab, saved.left, saved.top);
+
+  let drag = null;
+  const THRESHOLD = 6;
+
+  fab.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0 && e.pointerType === "mouse") return;
+    const rect = fab.getBoundingClientRect();
+    drag = {
+      startX: e.clientX,
+      startY: e.clientY,
+      fabX: rect.left,
+      fabY: rect.top,
+      moved: false,
+      pointerId: e.pointerId,
+    };
+    fab.setPointerCapture(e.pointerId);
+  });
+
+  fab.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.startX;
+    const dy = e.clientY - drag.startY;
+    if (!drag.moved && Math.hypot(dx, dy) < THRESHOLD) return;
+    drag.moved = true;
+    fab.classList.add("dragging");
+    applyFabPos(fab, drag.fabX + dx, drag.fabY + dy);
+    e.preventDefault();
+  });
+
+  const finish = (e) => {
+    if (!drag) return;
+    const wasDrag = drag.moved;
+    try { fab.releasePointerCapture(drag.pointerId); } catch {}
+    drag = null;
+    fab.classList.remove("dragging");
+    if (wasDrag) {
+      // 存位置
+      const rect = fab.getBoundingClientRect();
+      saveFabPos(rect.left, rect.top);
+      // 防止 click 觸發 (拖完不該開 dashboard)
+      fab._lastDragEndAt = Date.now();
+    }
+  };
+  fab.addEventListener("pointerup", finish);
+  fab.addEventListener("pointercancel", finish);
+
+  fab.addEventListener("click", (e) => {
+    // 剛拖完不要觸發 click
+    if (fab._lastDragEndAt && Date.now() - fab._lastDragEndAt < 250) {
+      e.preventDefault();
+      return;
+    }
+    openDashboard();
+  });
+
+  // 視窗改大小時 re-clamp
+  window.addEventListener("resize", () => {
+    const rect = fab.getBoundingClientRect();
+    if (rect.left + 60 > window.innerWidth || rect.top + 60 > window.innerHeight) {
+      const fixed = applyFabPos(fab, rect.left, rect.top);
+      saveFabPos(fixed.left, fixed.top);
+    }
+  });
+}
+
+// ====================================================================
+// 實體鍵盤 → keypad
+// ====================================================================
+function handleKeyboardInput(e) {
+  // 只在主畫面、且 input 沒在 focus 時接管數字鍵
+  if (state.view !== "main") return;
+  const active = document.activeElement;
+  if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA")) return;
+  // 也跳過如果 modal 開著
+  if (!$("#settleModal").classList.contains("hidden")) return;
+  if (!$("#dashOverlay").classList.contains("hidden")) return;
+  if (!$("#deleteModal").classList.contains("hidden")) return;
+
+  const k = e.key;
+  let mapped = null;
+  if (/^\d$/.test(k)) mapped = k;
+  else if (k === "+") mapped = "+";
+  else if (k === "-") mapped = "−";
+  else if (k === "*" || k === "x" || k === "X") mapped = "×";
+  else if (k === "/") mapped = "÷";
+  else if (k === "Backspace") mapped = "back";
+  else if (k === "Delete" || k === "Escape") mapped = "clear";
+  else if (k === "Enter") {
+    e.preventDefault();
+    if (!$("#submitBtn").disabled) submitEntry();
+    return;
+  }
+  if (mapped !== null) {
+    e.preventDefault();
+    pressKey(mapped);
+  }
 }
 
 // ====================================================================
@@ -890,42 +1212,67 @@ function selectOther(person) {
 }
 
 function pressKey(key) {
+  const OPS = "+-−*×/÷";
   if (key === "back") {
-    state.amount = Math.floor(state.amount / 10);
+    state.expression = state.expression.slice(0, -1);
   } else if (key === "clear") {
-    state.amount = 0;
-  } else {
-    const digit = Number(key);
-    if (Number.isNaN(digit)) return;
-    const next = state.amount * 10 + digit;
-    if (next > 9999999) return;
-    state.amount = next;
+    state.expression = "";
+  } else if (OPS.includes(key)) {
+    // Can't start expression with operator
+    if (state.expression === "") return;
+    const last = state.expression.slice(-1);
+    if (OPS.includes(last)) {
+      // Replace previous trailing operator
+      state.expression = state.expression.slice(0, -1) + key;
+    } else {
+      state.expression += key;
+    }
+  } else if (/^\d$/.test(key)) {
+    if (state.expression.length >= 28) return; // cap
+    // Avoid leading-zero junk: if last segment is just "0", replace it
+    const lastSegMatch = state.expression.match(/(?:^|[+\-−*×/÷])(\d+)$/);
+    if (lastSegMatch && lastSegMatch[1] === "0" && key !== "0") {
+      state.expression = state.expression.slice(0, -1) + key;
+    } else {
+      state.expression += key;
+    }
   }
   renderAmount();
   renderSubmit();
-  renderSettleBar();
 }
 
 async function submitEntry() {
   const note = ($("#noteInput").value || "").trim();
-  if (!state.me || !state.other || state.amount <= 0) return;
+  if (!state.me || !state.other) return;
   if (state.me === state.other) return;
+
+  let amount;
+  try {
+    amount = evalExpression(state.expression);
+  } catch {
+    showToast("金額算式有誤");
+    return;
+  }
+  if (amount <= 0) {
+    showToast("金額必須大於 0");
+    return;
+  }
 
   const payload = {
     from: state.me,
     to: state.other,
-    amount: state.amount,
+    amount,
     note,
   };
   try {
     await backend.addEntry(payload);
-    // reset amount + other + note, keep me
-    state.amount = 0;
+    // reset expression + other + note, keep me
+    state.expression = "";
     state.other = null;
     $("#noteInput").value = "";
     state.note = "";
     render();
-    showToast(`已記下：${payload.from} → ${payload.to} $${payload.amount.toLocaleString("en-US")}`);
+    showToast(`已記下：${payload.from} → ${payload.to} $${amount.toLocaleString("en-US")}`);
   } catch (err) {
     console.error(err);
     showToast("寫入失敗：" + (err.message || err));
@@ -934,6 +1281,8 @@ async function submitEntry() {
 
 function toggleView() {
   state.view = state.view === "main" ? "history" : "main";
+  // 進歷史頁時，default tab 固定回未結帳（按使用者要求）
+  if (state.view === "history") state.historyTab = "unsettled";
   render();
 }
 
@@ -978,12 +1327,15 @@ function bindUI() {
     });
   });
 
-  // dashboard FAB
-  $("#dashFab").addEventListener("click", openDashboard);
+  // dashboard FAB — supports drag + click
+  bindFabDrag();
   $("#dashClose").addEventListener("click", closeDashboard);
   $("#dashOverlay").addEventListener("click", (e) => {
     if (e.target.id === "dashOverlay") closeDashboard();
   });
+
+  // 實體鍵盤 (desktop / 鍵盤外接) — calculator 用
+  document.addEventListener("keydown", handleKeyboardInput);
 
   // tap outside modal to close
   $("#settleModal").addEventListener("click", (e) => {
@@ -1037,6 +1389,7 @@ function init() {
     state.entries = items;
     renderEntries();
     renderHistoryEntries();
+    renderDeletedEntries();
     renderSettleBar();
     renderDashboard();
   });
