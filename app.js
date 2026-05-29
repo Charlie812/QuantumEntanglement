@@ -743,32 +743,10 @@ function renderDashboard() {
   refreshDashCanvas(r, orbSizes);
 }
 
-// 勢力板塊背景 — 各人正向 net balance 越大、自己那一邊的光暈越大
+// 機率雲光暈已改由 canvas 用 radial gradient 平滑繪製（更柔、無 SVG 硬邊）
 function renderDashboardTerritory(r) {
   const g = $("#dashTerritory");
-  g.innerHTML = "";
-
-  const positives = PEOPLE.map((p) => Math.max(0, r.balances?.[p] || 0));
-  const maxPos = Math.max(...positives, 1);
-  const totalPos = positives.reduce((a, b) => a + b, 0);
-
-  for (let i = 0; i < PEOPLE.length; i++) {
-    const p = PEOPLE[i];
-    const pos = ORB_POSITIONS[p];
-    const positive = positives[i];
-    // 半徑：正向值越大、輻射越廣。最小保留一點光暈、最大幾乎佔整個 canvas
-    const ratio = totalPos === 0 ? 0.18 : 0.18 + (positive / maxPos) * 0.55;
-    const r_pct = ratio * 360;
-    const cls = PERSON_CLASS[p];
-    const circle = svgEl("circle", {
-      cx: pos.x,
-      cy: pos.y,
-      r: r_pct,
-      fill: `url(#terr-${cls})`,
-      class: `dash-territory ${cls}`,
-    });
-    g.appendChild(circle);
-  }
+  if (g) g.innerHTML = "";
 }
 
 // 背景星星 — 給夜空感
@@ -803,89 +781,94 @@ function renderDashboardStars() {
   }
 }
 
+// 電子軌域幾何 — 三道傾角不同的扁橢圓（交叉成原子符號 ⚛）
+function nodeShellGeom(coreR) {
+  const b = coreR + 11;
+  return [
+    { rx: b,        ry: b * 0.34, tilt: -22 },
+    { rx: b * 0.94, ry: b * 0.30, tilt:  40 },
+    { rx: b * 1.10, ry: b * 0.28, tilt:  92 },
+  ];
+}
+
 function renderDashboardOrbs(r, orbSizes) {
   const g = $("#dashOrbs");
   g.innerHTML = "";
 
-  // 找出「最大債權人」（balance 正最高的）— 給他王者金環
+  // 最大債權人 — 給一圈相干光環（取代醜醜的金色王者環）
   const balances = PEOPLE.map((p) => ({ p, v: r.balances?.[p] || 0 }));
-  const kingEntry = balances.filter((b) => b.v > 0).sort((a, b) => b.v - a.v)[0];
-  const king = kingEntry?.p;
+  const topCreditor = balances.filter((b) => b.v > 0).sort((a, b) => b.v - a.v)[0]?.p;
 
   for (const p of PEOPLE) {
     const pos = ORB_POSITIONS[p];
     const cls = PERSON_CLASS[p];
     const bal = r.balances?.[p] || 0;
     const coreR = orbSizes[p];
-    const haloR = coreR * 1.65;
 
-    const grp = svgEl("g", { transform: `translate(${pos.x}, ${pos.y})`, class: "dash-orb-g" });
+    const grp = svgEl("g", { transform: `translate(${pos.x}, ${pos.y})`, class: "dash-node" });
 
-    // 光暈
-    grp.appendChild(svgEl("circle", { r: haloR, class: `dash-orb-halo ${cls}` }));
-
-    // 3 個 staggered 漣漪 (能量波)
-    for (let i = 0; i < 3; i++) {
-      grp.appendChild(svgEl("circle", {
-        r: coreR,
-        class: `dash-orb-ripple ${cls}`,
-        style: `animation-delay: ${i * 0.9}s`,
-      }));
-    }
-
-    // 軌道環（旋轉的虛線）
-    grp.appendChild(svgEl("circle", { r: coreR + 9, class: `dash-orb-ring ${cls}` }));
-
-    // 王者金環（最大正債權人）
-    if (p === king) {
-      grp.appendChild(svgEl("circle", { r: coreR + 5, class: "dash-orb-king-ring" }));
-    }
-
-    // 核心 — radial gradient 球體 + feTurbulence 抖動
+    // 核心 — 中心發光的原子核
     grp.appendChild(svgEl("circle", {
       r: coreR,
-      class: `dash-orb-core ${cls}`,
+      class: `dash-node-core ${cls}`,
       fill: `url(#orb-grad-${cls})`,
-      filter: bal > 0 ? "url(#energy-strong)" : "url(#energy)",
     }));
 
-    // 文字用 SVG filter 加柔性深色光暈 (替代矩形 pill 的醜遮罩)
-    let balLabel, balFillColor;
-    if (bal > 0) {
-      balLabel = `+$${bal.toLocaleString("en-US")}`;
-      balFillColor = "#6ef0a8";
-    } else if (bal < 0) {
-      balLabel = `-$${(-bal).toLocaleString("en-US")}`;
-      balFillColor = "#ff8d99";
-    } else {
-      balLabel = "持平";
-      balFillColor = "rgba(255,255,255,0.92)";
+    // 相干光環（最大債權人）
+    if (p === topCreditor) {
+      grp.appendChild(svgEl("circle", { r: coreR + 4.5, class: "dash-node-coherence" }));
     }
 
-    // 名字 — 走 SVG attribute + 柔性 dropshadow filter
+    // 電子軌域 — 靜止的傾斜橢圓，各有一顆電子沿軌道繞行（波耳原子）
+    const shells = nodeShellGeom(coreR);
+    shells.forEach((sh, si) => {
+      const sg = svgEl("g", { transform: `rotate(${sh.tilt})` });
+      const rx = sh.rx.toFixed(1), ry = sh.ry.toFixed(1), nrx = (-sh.rx).toFixed(1);
+      sg.appendChild(svgEl("ellipse", {
+        rx, ry, class: `dash-shell ${cls}${si > 0 ? " shell-dim" : ""}`,
+      }));
+      // 電子：白熾點沿橢圓路徑繞行（彗尾來自 canvas 拖尾以外，這裡靠 glow）
+      const sweep = si % 2 === 0 ? 1 : 0;
+      const path = `M ${nrx} 0 A ${rx} ${ry} 0 1 ${sweep} ${rx} 0 A ${rx} ${ry} 0 1 ${sweep} ${nrx} 0 Z`;
+      const elec = svgEl("circle", {
+        r: (2.4 + Math.max(0, coreR - 18) / 32 * 1.7).toFixed(2),
+        class: `dash-electron ${cls}`,
+      });
+      elec.appendChild(svgEl("animateMotion", {
+        dur: `${(3.0 + si * 1.4).toFixed(1)}s`,
+        repeatCount: "indefinite",
+        path,
+        begin: `${(si * 0.55).toFixed(2)}s`,
+      }));
+      sg.appendChild(elec);
+      grp.appendChild(sg);
+    });
+
+    // 名字 + 淨額 — 移到原子外側（朝畫面中心方向），不擋住核/軌域/電子
+    let balLabel, balCls;
+    if (bal > 0) { balLabel = `+$${bal.toLocaleString("en-US")}`; balCls = "positive"; }
+    else if (bal < 0) { balLabel = `-$${(-bal).toLocaleString("en-US")}`; balCls = "negative"; }
+    else { balLabel = "持平"; balCls = "zero"; }
+
+    // 標籤一律放節點「上方」：避開所有往下/往側邊延伸的糾纏鍵（此三角佈局上方恆為淨空）
+    // 間距用殼層實際垂直延伸（近垂直軌域會伸很遠），確保不壓到原子也不碰到流動
+    const vExtent = Math.max(
+      coreR,
+      ...shells.map((s) => Math.abs(s.rx * Math.sin((s.tilt * Math.PI) / 180)))
+    );
+    const balY = -(vExtent + 13);
+    const nameY = balY - 14;
+
     const name = svgEl("text", {
-      x: 0, y: -3,
-      "text-anchor": "middle",
-      "font-size": "14",
-      "font-weight": "600",
-      fill: "#ffffff",
-      filter: "url(#textShadow)",
-      "pointer-events": "none",
+      x: 0, y: nameY.toFixed(1), "text-anchor": "middle",
+      class: "dash-node-name", filter: "url(#textShadow)", "pointer-events": "none",
     });
     name.textContent = p;
     grp.appendChild(name);
 
-    // 平衡金額
     const balEl = svgEl("text", {
-      x: 0, y: 12,
-      "text-anchor": "middle",
-      "font-size": "11.5",
-      "font-weight": "600",
-      "font-variant-numeric": "tabular-nums",
-      "letter-spacing": "0.3",
-      fill: balFillColor,
-      filter: "url(#textShadow)",
-      "pointer-events": "none",
+      x: 0, y: balY.toFixed(1), "text-anchor": "middle",
+      class: `dash-node-bal ${balCls}`, filter: "url(#textShadow)", "pointer-events": "none",
     });
     balEl.textContent = balLabel;
     grp.appendChild(balEl);
@@ -964,8 +947,27 @@ function openDashboard() {
   startCanvasAnimation();
 }
 function closeDashboard() {
+  if (isWideLayout()) return; // 桌機是常駐右欄、不關閉
   $("#dashOverlay").classList.add("hidden");
   stopCanvasAnimation();
+}
+
+// 寬螢幕 = 雙欄；糾纏視覺常駐右欄、不靠 FAB modal
+function isWideLayout() {
+  return window.matchMedia("(min-width: 1000px)").matches;
+}
+function applyLayoutMode() {
+  const overlay = $("#dashOverlay");
+  if (!overlay) return;
+  if (isWideLayout()) {
+    overlay.classList.remove("hidden");
+    canvasDimsCache = null;     // 版面改變 → 重新量 canvas 尺寸
+    renderDashboard();
+    startCanvasAnimation();
+  } else {
+    overlay.classList.add("hidden");
+    stopCanvasAnimation();
+  }
 }
 
 // ====================================================================
@@ -986,19 +988,28 @@ const PERSON_RGB = {
   Eric:    [255, 210, 74],
 };
 
+// 量子泡沫 — 以冷白/淡藍為主，偶爾一點人色，整體克制
 const BG_COLORS = [
+  [210, 225, 255],
+  [180, 205, 255],
+  [255, 255, 255],
+  [120, 150, 230],
   [0, 229, 255],
-  [255, 94, 196],
   [255, 210, 74],
-  [139, 108, 255],
-  [255, 255, 255],
-  [255, 255, 255],
+];
+
+const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+const lerpRGB = (a, b, t) => [
+  a[0] + (b[0] - a[0]) * t,
+  a[1] + (b[1] - a[1]) * t,
+  a[2] + (b[2] - a[2]) * t,
 ];
 
 const canvasState = {
-  bg: [],        // background drifters
-  streams: [],   // line flow particles
-  auras: [],     // orbital particles around each orb
+  bg: [],        // background quantum foam
+  bonds: [],     // entanglement bonds (one per transaction)
+  quanta: [],    // coherent quanta flowing along bonds
+  auras: [],     // fine orbital dust around each node
   needsRebuild: true,
   txs: [],
   orbSizes: {},
@@ -1023,20 +1034,20 @@ function initCanvas() {
   ctx.clearRect(0, 0, SCENE_W, SCENE_H);
   canvasDimsCache = { w: rect.width, h: rect.height, dpr };
 
-  // background drifters — 一次性 spawn (砍量 + 降亮度)
+  // 量子泡沫 — 細、暗、安靜的背景顆粒（一次性 spawn）
   if (canvasState.bg.length === 0) {
-    for (let i = 0; i < 80; i++) {
+    for (let i = 0; i < 56; i++) {
       const c = BG_COLORS[Math.floor(Math.random() * BG_COLORS.length)];
       canvasState.bg.push({
         x: Math.random() * SCENE_W,
         y: Math.random() * SCENE_H,
-        vx: (Math.random() - 0.5) * 0.14,
-        vy: (Math.random() - 0.5) * 0.14,
-        r: 0.3 + Math.random() * 1.6,
+        vx: 0,                      // 原地閃爍，不位移 → 不會在拖尾下拉出灰條紋
+        vy: 0,
+        r: 0.25 + Math.random() * 1.1,
         color: c,
-        a: 0.08 + Math.random() * 0.38,
+        a: 0.05 + Math.random() * 0.22,
         phase: Math.random() * Math.PI * 2,
-        speed: 0.4 + Math.random() * 1.6,
+        speed: 0.3 + Math.random() * 1.3,
       });
     }
   }
@@ -1061,71 +1072,127 @@ function bezierTangent(t, p0, ctrl, p1) {
   };
 }
 
+// 沿糾纏鍵某 t 取點，含「行進波函數」的垂直位移（兩端收斂的駐波包絡）
+function bondPointAt(bond, t, now) {
+  const pt = bezierPointAt(t, bond.p0, bond.ctrl, bond.p1);
+  const tan = bezierTangent(t, bond.p0, bond.ctrl, bond.p1);
+  const tl = Math.hypot(tan.x, tan.y) || 1;
+  const px = -tan.y / tl, py = tan.x / tl;
+  const env = Math.sin(t * Math.PI);                       // 兩端 0、中段 1
+  const wave = Math.sin(t * Math.PI * 3 - now * 2.1 + bond.phase) * bond.waveAmp * env;
+  return { x: pt.x + px * wave, y: pt.y + py * wave, px, py };
+}
+
 function rebuildStreamsAndAuras() {
-  canvasState.streams.length = 0;
+  canvasState.bonds.length = 0;
+  canvasState.quanta.length = 0;
   canvasState.auras.length = 0;
 
-  // Orbit auras for each person — 數量更少、size 更小
+  // 每個節點的細軌道塵（量子軌域上的微粒）
   for (const p of PEOPLE) {
     const pos = ORB_POSITIONS[p];
     const baseR = canvasState.orbSizes[p] || 32;
     const color = PERSON_RGB[p];
-    const count = Math.round(10 + ((baseR - 18) / 32) * 12); // 10~22
+    const count = Math.round(3 + ((baseR - 18) / 32) * 4); // 3~7，淡淡機率雲（電子另用 SVG）
     for (let i = 0; i < count; i++) {
       canvasState.auras.push({
         cx: pos.x, cy: pos.y,
         baseR,
-        radOffset: 3 + Math.random() * (baseR * 0.5),
+        radOffset: 4 + Math.random() * (baseR * 0.45),
         angle: Math.random() * Math.PI * 2,
-        omega: (Math.random() < 0.5 ? -1 : 1) * (0.003 + Math.random() * 0.009),
-        size: 0.35 + Math.random() * 1.0,
+        omega: (Math.random() < 0.5 ? -1 : 1) * (0.004 + Math.random() * 0.009),
+        size: 0.3 + Math.random() * 0.7,
         color,
-        ellipseRatio: 0.55 + Math.random() * 0.45,
+        ellipseRatio: 0.32 + Math.random() * 0.3,            // 偏扁 → 軌域感
         tiltCos: Math.cos(Math.random() * Math.PI),
         tiltSin: Math.sin(Math.random() * Math.PI),
         phase: Math.random() * Math.PI * 2,
-        pulseSpeed: 0.6 + Math.random() * 1.8,
+        pulseSpeed: 0.6 + Math.random() * 1.6,
       });
     }
   }
 
-  // Stream particles for each transaction
+  // 每筆轉帳 = 一條糾纏鍵
   const txs = canvasState.txs || [];
   if (txs.length === 0) return;
   const maxAmt = Math.max(...txs.map((t) => t.amount), 1);
 
-  for (const tx of txs) {
+  txs.forEach((tx, bi) => {
     const fromPos = ORB_POSITIONS[tx.from];
     const toPos = ORB_POSITIONS[tx.to];
-    const startR = (canvasState.orbSizes[tx.from] || 32) - 2;
-    const endR = (canvasState.orbSizes[tx.to] || 32) - 2;
+    const startR = (canvasState.orbSizes[tx.from] || 32) - 1;
+    const endR = (canvasState.orbSizes[tx.to] || 32) - 1;
     const ep = lineEndpoints(fromPos, toPos, startR, endR);
-    const curve = curvedPath(ep.start, ep.end, 0.22);
+    const curve = curvedPath(ep.start, ep.end, 0.2);
     const ratio = tx.amount / maxAmt;
-    const count = Math.round(40 + ratio * 60); // 40~100 — 收斂
-    const color = PERSON_RGB[tx.to];
-    // stream 寬度收窄（金額越大才寬）
-    const streamWidth = 2 + Math.pow(ratio, 0.55) * 7; // 2~9
 
-    for (let i = 0; i < count; i++) {
-      // triangular 分布 偏中間
-      const u = Math.random() + Math.random() - 1;
-      canvasState.streams.push({
-        p0: ep.start,
-        p1: ep.end,
-        ctrl: { x: curve.ctrlX, y: curve.ctrlY },
-        color,
-        t: Math.random(),
-        speed: (0.0026 + Math.random() * 0.0042) * (0.6 + ratio * 0.7),
-        size: 0.35 + Math.random() * (0.7 + ratio * 0.9), // 更小
-        whiteCore: Math.random() < 0.10,
-        lateralBase: u * (streamWidth / 2),
-        lateralAmp: 0.15 + Math.random() * 0.7,
-        lateralFreq: 1.2 + Math.random() * 3.5,
-        lateralPhase: Math.random() * Math.PI * 2,
+    canvasState.bonds.push({
+      p0: ep.start,
+      p1: ep.end,
+      ctrl: { x: curve.ctrlX, y: curve.ctrlY },
+      fromColor: PERSON_RGB[tx.from],
+      toColor: PERSON_RGB[tx.to],
+      width: 1.1 + Math.pow(ratio, 0.6) * 3.0,              // 1.1~4.1 細而優雅
+      waveAmp: 2.0 + ratio * 2.6,
+      phase: bi * 1.7,
+      ratio,
+    });
+
+    // 能量脈衝包：週期性沿鍵傳遞（債務人 → 債權人），金額越大越多越快
+    const pulses = Math.max(2, Math.round(2 + ratio * 4));   // 2~6 顆
+    const baseSpeed = 0.0022 + ratio * 0.0032;               // 大額更快
+    for (let i = 0; i < pulses; i++) {
+      canvasState.quanta.push({
+        bi,
+        t: i / pulses,                                        // 沿鍵均勻分佈
+        speed: baseSpeed,
+        headSize: 1.3 + ratio * 1.5,                          // 頭部更集中
+        tailSpan: 0.07 + ratio * 0.045,                       // 彗尾更短更俐落
       });
     }
+  });
+}
+
+// 機率雲光暈 — radial gradient，平滑無硬邊
+function drawHalo(ctx, x, y, r, color, alpha) {
+  const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+  grad.addColorStop(0, rgba(color, alpha));
+  grad.addColorStop(0.5, rgba(color, alpha * 0.35));
+  grad.addColorStop(1, rgba(color, 0));
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// 糾纏鍵光絲 — 多 pass 漸層描邊（外暈→中層→亮核），顏色由兩端融合
+function drawBond(ctx, bond, now) {
+  const STEPS = 36;
+  const pts = [];
+  for (let i = 0; i <= STEPS; i++) pts.push(bondPointAt(bond, i / STEPS, now));
+
+  const grad = ctx.createLinearGradient(bond.p0.x, bond.p0.y, bond.p1.x, bond.p1.y);
+  grad.addColorStop(0, rgba(bond.fromColor, 1));
+  grad.addColorStop(0.5, rgba(lerpRGB(bond.fromColor, bond.toColor, 0.5), 1));
+  grad.addColorStop(1, rgba(bond.toColor, 1));
+
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  const passes = [
+    { w: bond.width * 3.2, a: 0.05 },
+    { w: bond.width * 1.4, a: 0.11 },
+    { w: bond.width * 0.45, a: 0.18 },
+  ];
+  for (const ps of passes) {
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.strokeStyle = grad;
+    ctx.globalAlpha = ps.a;
+    ctx.lineWidth = ps.w;
+    ctx.stroke();
   }
+  ctx.globalAlpha = 1;
 }
 
 function tickCanvas() {
@@ -1146,9 +1213,9 @@ function tickCanvas() {
     canvasState.needsRebuild = false;
   }
 
-  // 拖尾 — 7.5% per frame (~14 frame trail) 不要過糊
+  // 拖尾 — 較快清除（8.5%/frame），畫面乾淨不糊
   ctx.globalCompositeOperation = "destination-out";
-  ctx.fillStyle = "rgba(0,0,0,0.075)";
+  ctx.fillStyle = "rgba(0,0,0,0.085)";
   ctx.fillRect(0, 0, SCENE_W, SCENE_H);
 
   // additive (bloom)
@@ -1156,7 +1223,15 @@ function tickCanvas() {
 
   const now = performance.now() * 0.001;
 
-  // ---- Background drifters ----
+  // ---- 機率雲光暈（節點背後柔光，呼吸）----
+  for (const p of PEOPLE) {
+    const pos = ORB_POSITIONS[p];
+    const baseR = canvasState.orbSizes[p] || 32;
+    const breathe = (Math.sin(now * 0.7 + pos.x) + 1) * 0.5;
+    drawHalo(ctx, pos.x, pos.y, baseR * 2.6, PERSON_RGB[p], 0.045 + breathe * 0.03);
+  }
+
+  // ---- 量子泡沫背景 ----
   for (const p of canvasState.bg) {
     p.x += p.vx;
     p.y += p.vy;
@@ -1164,57 +1239,64 @@ function tickCanvas() {
     else if (p.x > SCENE_W + 3) p.x = -3;
     if (p.y < -3) p.y = SCENE_H + 3;
     else if (p.y > SCENE_H + 3) p.y = -3;
-
     const pulse = (Math.sin(now * p.speed + p.phase) + 1) * 0.5;
-    const a = p.a * (0.3 + pulse * 0.7);
-    drawGlowDot(ctx, p.x, p.y, p.r, p.color, a);
+    drawGlowDot(ctx, p.x, p.y, p.r, p.color, p.a * (0.3 + pulse * 0.7));
   }
 
-  // ---- Orb auras (orbital particles) ----
+  // ---- 糾纏鍵光絲 ----
+  for (const bond of canvasState.bonds) drawBond(ctx, bond, now);
+
+  // ---- 能量脈衝包（沿鍵傳遞 + 俐落彗尾）----
+  const TAIL = 11;
+  for (const q of canvasState.quanta) {
+    const bond = canvasState.bonds[q.bi];
+    if (!bond) continue;
+    q.t += q.speed;
+    if (q.t > 1) q.t -= 1;
+    // 從尾到頭逐點繪製（頭最後畫＝疊在最上層）
+    for (let k = TAIL; k >= 0; k--) {
+      const frac = k / TAIL;                 // 1=尾端、0=頭部
+      const tt = q.t - frac * q.tailSpan;
+      if (tt < 0) continue;                  // 尾巴不繞回、保持乾淨
+      const head = 1 - frac;                 // 0=尾、1=頭
+      const taper = Math.pow(head, 1.5);     // 彗尾快速收細
+      const bp = bondPointAt(bond, tt, now);
+      const env = Math.sin(tt * Math.PI);    // 兩端淡出
+      const size = q.headSize * (0.08 + taper * 0.92);
+      const alpha = (0.05 + Math.pow(head, 1.3) * 0.9) * (0.45 + env * 0.55);
+      const col = k <= 1
+        ? [255, 255, 255]                    // 頭部白熾
+        : lerpRGB(bond.fromColor, bond.toColor, tt);
+      drawSharpDot(ctx, bp.x, bp.y, size, col, alpha);
+    }
+  }
+
+  // ---- 節點軌道細塵 ----
   for (const o of canvasState.auras) {
     o.angle += o.omega;
     const r = o.baseR + o.radOffset;
     const lx = Math.cos(o.angle) * r;
     const ly = Math.sin(o.angle) * r * o.ellipseRatio;
-    // rotate by tilt
     const x = o.cx + lx * o.tiltCos - ly * o.tiltSin;
     const y = o.cy + lx * o.tiltSin + ly * o.tiltCos;
     const pulse = (Math.sin(now * o.pulseSpeed + o.phase) + 1) * 0.5;
-    const a = 0.45 + pulse * 0.55;
-    drawGlowDot(ctx, x, y, o.size, o.color, a);
-  }
-
-  // ---- Stream particles (bezier flow with ribbon-like lateral spread) ----
-  for (const s of canvasState.streams) {
-    s.t += s.speed;
-    if (s.t > 1) s.t -= 1; // recycle smoothly
-
-    // 沿曲線取點 + tangent (才能算正確的 perpendicular)
-    const pt = bezierPointAt(s.t, s.p0, s.ctrl, s.p1);
-    const tan = bezierTangent(s.t, s.p0, s.ctrl, s.p1);
-    const tlen = Math.hypot(tan.x, tan.y) || 1;
-    const px = -tan.y / tlen;
-    const py = tan.x / tlen;
-
-    // lateral = 固定偏移 + sin 抖動 (粒子互相穿插、形成 ribbon-weave)
-    const wob = Math.sin(s.t * s.lateralFreq * Math.PI * 2 + s.lateralPhase + now * 1.2) * s.lateralAmp;
-    const lateral = s.lateralBase + wob;
-    const x = pt.x + px * lateral;
-    const y = pt.y + py * lateral;
-
-    // lifecycle fade at extremes (smooth in/out)
-    const lifeFade =
-      s.t < 0.06 ? s.t / 0.06 :
-      s.t > 0.94 ? (1 - s.t) / 0.06 : 1;
-
-    if (s.whiteCore) {
-      drawGlowDot(ctx, x, y, s.size, [255, 255, 255], 0.7 * lifeFade);
-    } else {
-      drawGlowDot(ctx, x, y, s.size, s.color, 0.62 * lifeFade);
-    }
+    drawGlowDot(ctx, x, y, o.size, o.color, 0.35 + pulse * 0.5);
   }
 
   canvasAnimHandle = requestAnimationFrame(tickCanvas);
+}
+
+// 比 drawGlowDot 更緊的兩層繪點 — 給能量脈衝用，俐落不糊
+function drawSharpDot(ctx, x, y, r, color, alpha) {
+  const [cr, cg, cb] = color;
+  ctx.beginPath();
+  ctx.arc(x, y, r * 2.1, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(${cr},${cg},${cb},${alpha * 0.12})`;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x, y, r * 0.95, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(${cr},${cg},${cb},${alpha * 0.9})`;
+  ctx.fill();
 }
 
 function drawGlowDot(ctx, x, y, r, color, alpha) {
@@ -1823,6 +1905,10 @@ function init() {
   });
 
   render();
+
+  // 寬螢幕：糾纏視覺常駐右欄
+  applyLayoutMode();
+  window.matchMedia("(min-width: 1000px)").addEventListener("change", applyLayoutMode);
 }
 
 init();

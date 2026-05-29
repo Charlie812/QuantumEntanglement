@@ -846,12 +846,11 @@ body::after {
   display: flex;
   flex-direction: column;
   background:
-    radial-gradient(circle at 0% 0%, rgba(0,229,255,0.10), transparent 50%),
-    radial-gradient(circle at 100% 100%, rgba(255,94,196,0.10), transparent 50%),
-    rgba(14, 14, 26, 0.62);
-  backdrop-filter: blur(28px) saturate(1.4);
-  -webkit-backdrop-filter: blur(28px) saturate(1.4);
-  border: 1px solid rgba(139, 108, 255, 0.22);
+    radial-gradient(circle at 50% -10%, rgba(125,114,201,0.12), transparent 55%),
+    rgba(12, 13, 20, 0.68);
+  backdrop-filter: blur(28px) saturate(1.2);
+  -webkit-backdrop-filter: blur(28px) saturate(1.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-lg);
   padding: 22px 18px 20px;
   box-shadow:
@@ -865,9 +864,8 @@ body::after {
   position: absolute;
   inset: -50%;
   background:
-    radial-gradient(circle at 30% 20%, rgba(0,229,255,0.05), transparent 25%),
-    radial-gradient(circle at 70% 80%, rgba(255,94,196,0.05), transparent 25%),
-    radial-gradient(circle at 50% 50%, rgba(255,210,74,0.04), transparent 30%);
+    radial-gradient(circle at 30% 20%, rgba(125,114,201,0.05), transparent 28%),
+    radial-gradient(circle at 70% 80%, rgba(125,114,201,0.04), transparent 28%);
   pointer-events: none;
   animation: dash-rotate 60s linear infinite;
 }
@@ -904,8 +902,8 @@ body::after {
 .dash-title {
   font-size: 20px;
   font-weight: 700;
-  letter-spacing: 2px;
-  background: linear-gradient(90deg, var(--c-charlie), var(--c-weixian), var(--c-eric));
+  letter-spacing: 1px;
+  background: linear-gradient(90deg, #7fe9ff, #b6a8ff);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -926,6 +924,16 @@ body::after {
   margin: 4px auto 0;
   border-radius: var(--radius-md);
   overflow: hidden;
+  /* 乾淨深空底 — 取代亂流碎片背景 */
+  background:
+    radial-gradient(circle at 50% 42%, #131a2c 0%, #0a0c16 52%, #05060c 100%);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04), inset 0 0 50px rgba(0,0,0,0.5);
+}
+/* dashboard 視覺區用鮮豔識別色（清單 UI 仍用降飽和的 --c-*） */
+.dash-overlay {
+  --d-charlie: #2ad4ff;
+  --d-weixian: #ff6ec8;
+  --d-eric:    #ffd24a;
 }
 .dash-canvas-bg {
   position: absolute;
@@ -994,113 +1002,74 @@ body::after {
   50%      { opacity: 0.9; }
 }
 
-/* Concentric energy ripples emanating from each orb */
-.dash-orb-ripple {
-  fill: none;
-  stroke-width: 2;
-  opacity: 0;
-  transform-origin: center;
-  transform-box: fill-box;
-  animation: ripple-out 2.7s ease-out infinite;
-  pointer-events: none;
-}
-.dash-orb-ripple.charlie { color: var(--c-charlie); stroke: var(--c-charlie); }
-.dash-orb-ripple.weixian { color: var(--c-weixian); stroke: var(--c-weixian); }
-.dash-orb-ripple.eric    { color: var(--c-eric);    stroke: var(--c-eric); }
-@keyframes ripple-out {
-  0%   { opacity: 0.85; transform: scale(0.7); stroke-width: 3; }
-  60%  { opacity: 0.35; }
-  100% { opacity: 0;    transform: scale(2.4); stroke-width: 0.3; }
-}
+/* ===== Quantum nodes (people) ===== */
 
-/* Orbs */
-.dash-orb-halo {
-  opacity: 0.35;
-  animation: orb-halo 3.6s ease-in-out infinite;
-  transform-origin: center;
-  transform-box: fill-box;
-}
-.dash-orb-halo.charlie { fill: var(--c-charlie); animation-delay: 0s; }
-.dash-orb-halo.weixian { fill: var(--c-weixian); animation-delay: 0.6s; }
-.dash-orb-halo.eric    { fill: var(--c-eric);    animation-delay: 1.2s; }
-@keyframes orb-halo {
-  0%, 100% { opacity: 0.20; transform: scale(0.95); }
-  50%      { opacity: 0.55; transform: scale(1.18); }
-}
-
-/* Orbital ring around each orb (rotating) */
-.dash-orb-ring {
+/* 電子軌域 — 靜止傾斜橢圓，僅亮度呼吸（自轉會讓電子對不上軌道，故不轉） */
+.dash-shell {
   fill: none;
   stroke-width: 1.2;
-  stroke-dasharray: 3 6;
-  opacity: 0.6;
-  transform-origin: center;
-  transform-box: fill-box;
-  animation: orb-ring-spin 12s linear infinite;
+  opacity: 0.5;
+  animation: shell-breathe 4.5s ease-in-out infinite;
 }
-.dash-orb-ring.charlie { stroke: var(--c-charlie); animation-delay: 0s; }
-.dash-orb-ring.weixian { stroke: var(--c-weixian); animation-delay: -4s; animation-direction: reverse; }
-.dash-orb-ring.eric    { stroke: var(--c-eric);    animation-delay: -8s; }
-@keyframes orb-ring-spin {
-  to { transform: rotate(360deg); }
-}
-
-.dash-orb-core {
-  transform-origin: center;
-  transform-box: fill-box;
-  animation: orb-pulse 3.6s ease-in-out infinite;
-  filter: drop-shadow(0 0 12px currentColor);
-}
-.dash-orb-core.charlie { color: var(--c-charlie); animation-delay: 0s; }
-.dash-orb-core.weixian { color: var(--c-weixian); animation-delay: 0.6s; }
-.dash-orb-core.eric    { color: var(--c-eric);    animation-delay: 1.2s; }
-@keyframes orb-pulse {
-  0%, 100% { transform: scale(1); }
-  50%      { transform: scale(1.08); }
+.dash-shell.shell-dim { animation-duration: 6s; }
+.dash-shell.charlie { stroke: var(--d-charlie); }
+.dash-shell.weixian { stroke: var(--d-weixian); }
+.dash-shell.eric    { stroke: var(--d-eric); }
+@keyframes shell-breathe {
+  0%, 100% { opacity: 0.3; }
+  50%      { opacity: 0.62; }
 }
 
-/* "King of debt" highlight — the most-owed person gets a crown ring */
-.dash-orb-king-ring {
+/* 電子 — 白熾點，繞核色光暈（更大更亮） */
+.dash-electron { fill: #ffffff; }
+.dash-electron.charlie { filter: drop-shadow(0 0 7px var(--d-charlie)) drop-shadow(0 0 3px #fff); }
+.dash-electron.weixian { filter: drop-shadow(0 0 7px var(--d-weixian)) drop-shadow(0 0 3px #fff); }
+.dash-electron.eric    { filter: drop-shadow(0 0 7px var(--d-eric))    drop-shadow(0 0 3px #fff); }
+
+/* 相干光環 — 最大債權人，柔白細環呼吸 */
+.dash-node-coherence {
   fill: none;
-  stroke: gold;
-  stroke-width: 2;
-  stroke-dasharray: 4 4;
-  opacity: 0.9;
-  transform-origin: center;
+  stroke: rgba(255, 255, 255, 0.75);
+  stroke-width: 1.2;
   transform-box: fill-box;
-  animation: king-spin 8s linear infinite;
-  filter: drop-shadow(0 0 6px gold);
+  transform-origin: center;
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.55));
+  animation: coherence-pulse 3.2s ease-in-out infinite;
 }
-@keyframes king-spin {
-  to { transform: rotate(-360deg); }
+@keyframes coherence-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.97); }
+  50%      { opacity: 0.85; transform: scale(1.05); }
 }
 
-.dash-orb-name {
-  font-size: 15px;
-  font-weight: 800;
-  fill: white;
-  text-anchor: middle;
-  letter-spacing: 0.5px;
-  pointer-events: none;
-  paint-order: stroke fill;
-  stroke: rgba(0, 0, 0, 0.85);
-  stroke-width: 3.5px;
-  stroke-linejoin: round;
+/* 發光核 — 輕微脈動 + 自身色光暈 */
+.dash-node-core {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: node-pulse 4s ease-in-out infinite;
 }
-.dash-orb-bal {
-  font-size: 12.5px;
-  font-weight: 800;
-  text-anchor: middle;
+.dash-node-core.charlie { filter: drop-shadow(0 0 6px var(--d-charlie)); }
+.dash-node-core.weixian { filter: drop-shadow(0 0 6px var(--d-weixian)); }
+.dash-node-core.eric    { filter: drop-shadow(0 0 6px var(--d-eric)); }
+@keyframes node-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.05); }
+}
+
+.dash-node-name {
+  font-size: 14px;
+  font-weight: 700;
+  fill: #ffffff;
+  letter-spacing: 0.3px;
+}
+.dash-node-bal {
+  font-size: 11.5px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  pointer-events: none;
-  paint-order: stroke fill;
-  stroke: rgba(0, 0, 0, 0.85);
-  stroke-width: 3px;
-  stroke-linejoin: round;
+  letter-spacing: 0.2px;
 }
-.dash-orb-bal.positive { fill: #6ef0a8; }
-.dash-orb-bal.negative { fill: #ff8d99; }
-.dash-orb-bal.zero     { fill: rgba(255,255,255,0.85); }
+.dash-node-bal.positive { fill: #74e6a6; }
+.dash-node-bal.negative { fill: #ff909b; }
+.dash-node-bal.zero     { fill: rgba(255, 255, 255, 0.9); }
 
 /* Tapered energy bar (debtor narrow → creditor wide) */
 .dash-bar {
@@ -1148,16 +1117,17 @@ body::after {
 
 /* Amount label on lines */
 .dash-label-bg {
-  fill: var(--bg-2);
-  stroke: var(--line-2);
+  fill: rgba(8, 10, 18, 0.72);
+  stroke: rgba(255, 255, 255, 0.14);
   stroke-width: 1;
 }
 .dash-label-text {
-  font-size: 13px;
-  font-weight: 700;
-  fill: white;
+  font-size: 12.5px;
+  font-weight: 600;
+  fill: rgba(255, 255, 255, 0.95);
   text-anchor: middle;
   font-variant-numeric: tabular-nums;
+  letter-spacing: 0.2px;
   pointer-events: none;
 }
 
@@ -1308,4 +1278,45 @@ body::after {
 @keyframes toast-in {
   from { opacity: 0; transform: translate(-50%, 10px); }
   to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* ========== Desktop / wide：雙欄（左輸入 + 右即時糾纏圖）========== */
+@media (min-width: 1000px) {
+  body {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 36px;
+    padding-left: 36px;
+    padding-right: 36px;
+  }
+  #app {
+    margin: 0;
+    max-width: 520px;
+    flex: 1 1 520px;
+  }
+  /* 糾纏視覺從全螢幕 modal → 右側常駐欄 */
+  .dash-overlay {
+    position: sticky;
+    top: 0;
+    inset: auto;
+    z-index: 1;
+    flex: 1 1 520px;
+    max-width: 540px;
+    height: 100vh;
+    height: 100dvh;
+    padding: 0;
+    background: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    animation: none;
+  }
+  .dash-overlay .dash-modal {
+    max-width: 100%;
+    max-height: 88vh;
+    animation: none;
+  }
+  .dash-overlay .dash-close { display: none; }   /* 常駐欄不需關閉鈕 */
+  .dash-fab { display: none !important; }          /* 桌機不用浮動鈕 */
 }

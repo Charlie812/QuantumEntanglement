@@ -307,18 +307,6 @@
           <filter id="dash-blur" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur stdDeviation="8"/>
           </filter>
-          <filter id="energy" x="-30%" y="-30%" width="160%" height="160%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.022" numOctaves="2" seed="7" result="noise">
-              <animate attributeName="baseFrequency" values="0.018;0.034;0.018" dur="7s" repeatCount="indefinite"/>
-            </feTurbulence>
-            <feDisplacementMap in="SourceGraphic" in2="noise" scale="7"/>
-          </filter>
-          <filter id="energy-strong" x="-40%" y="-40%" width="180%" height="180%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="3" seed="11" result="noise">
-              <animate attributeName="baseFrequency" values="0.013;0.026;0.013" dur="5s" repeatCount="indefinite"/>
-            </feTurbulence>
-            <feDisplacementMap in="SourceGraphic" in2="noise" scale="12"/>
-          </filter>
           <!-- 文字深色光暈 — 柔性陰影 (替代醜醜的矩形 pill) -->
           <filter id="textShadow" x="-60%" y="-60%" width="220%" height="220%">
             <feGaussianBlur in="SourceAlpha" stdDeviation="1.6"/>
@@ -346,24 +334,27 @@
             <stop offset="55%"  stop-color="#ffd24a" stop-opacity="0.09"/>
             <stop offset="100%" stop-color="#ffd24a" stop-opacity="0"/>
           </radialGradient>
-          <!-- Orb 球體漸層 — 深邃版（中心再壓低、讓白字 readable） -->
-          <radialGradient id="orb-grad-charlie" cx="38%" cy="32%" r="70%">
-            <stop offset="0%"   stop-color="#7ed4e6" stop-opacity="0.95"/>
-            <stop offset="30%"  stop-color="#2ba6c2" stop-opacity="1"/>
-            <stop offset="68%"  stop-color="#075c78" stop-opacity="0.97"/>
-            <stop offset="100%" stop-color="#020e16" stop-opacity="0.95"/>
+          <!-- Orb 核心 — 中心熾白發光的電漿核（非頂光彈珠），邊緣壓暗讓白字可讀 -->
+          <radialGradient id="orb-grad-charlie" cx="50%" cy="47%" r="62%">
+            <stop offset="0%"   stop-color="#eafcff" stop-opacity="1"/>
+            <stop offset="16%"  stop-color="#7df0ff" stop-opacity="1"/>
+            <stop offset="40%"  stop-color="#13b6d8" stop-opacity="0.98"/>
+            <stop offset="74%"  stop-color="#063847" stop-opacity="0.98"/>
+            <stop offset="100%" stop-color="#020e16" stop-opacity="1"/>
           </radialGradient>
-          <radialGradient id="orb-grad-weixian" cx="38%" cy="32%" r="70%">
-            <stop offset="0%"   stop-color="#f5a8c8" stop-opacity="0.95"/>
-            <stop offset="30%"  stop-color="#e066af" stop-opacity="1"/>
-            <stop offset="68%"  stop-color="#90185f" stop-opacity="0.97"/>
-            <stop offset="100%" stop-color="#1a0210" stop-opacity="0.95"/>
+          <radialGradient id="orb-grad-weixian" cx="50%" cy="47%" r="62%">
+            <stop offset="0%"   stop-color="#ffeaf5" stop-opacity="1"/>
+            <stop offset="16%"  stop-color="#ff9fd2" stop-opacity="1"/>
+            <stop offset="40%"  stop-color="#e84fa6" stop-opacity="0.98"/>
+            <stop offset="74%"  stop-color="#5e0d39" stop-opacity="0.98"/>
+            <stop offset="100%" stop-color="#1c0411" stop-opacity="1"/>
           </radialGradient>
-          <radialGradient id="orb-grad-eric" cx="38%" cy="32%" r="70%">
-            <stop offset="0%"   stop-color="#f0d684" stop-opacity="0.95"/>
-            <stop offset="30%"  stop-color="#d9a420" stop-opacity="1"/>
-            <stop offset="68%"  stop-color="#785a00" stop-opacity="0.97"/>
-            <stop offset="100%" stop-color="#171000" stop-opacity="0.95"/>
+          <radialGradient id="orb-grad-eric" cx="50%" cy="47%" r="62%">
+            <stop offset="0%"   stop-color="#fff6e0" stop-opacity="1"/>
+            <stop offset="16%"  stop-color="#ffe08f" stop-opacity="1"/>
+            <stop offset="40%"  stop-color="#e6b333" stop-opacity="0.98"/>
+            <stop offset="74%"  stop-color="#5c4400" stop-opacity="0.98"/>
+            <stop offset="100%" stop-color="#1a1200" stop-opacity="1"/>
           </radialGradient>
         </defs>
         <g id="dashTerritory" class="dash-territory-group"></g>
