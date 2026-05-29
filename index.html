@@ -43,10 +43,10 @@
   <!-- ========= MAIN VIEW ========= -->
   <main id="mainView" class="view">
 
-    <!-- Row 1: 我是誰 -->
+    <!-- Row 1: 誰欠錢 -->
     <section class="row">
-      <div class="row-label">我是誰?</div>
-      <div class="person-picker" data-target="me">
+      <div class="row-label">誰欠錢?</div>
+      <div class="person-picker" data-target="from">
         <button type="button" class="person-btn" data-person="Charlie">
           <span class="person-name">Charlie</span>
         </button>
@@ -90,10 +90,10 @@
       </div>
     </section>
 
-    <!-- Row 3: 我欠誰 -->
+    <!-- Row 3: 欠誰 -->
     <section class="row">
-      <div class="row-label">我欠誰?</div>
-      <div class="person-picker person-picker-other" data-target="other" id="otherPicker">
+      <div class="row-label">欠誰?</div>
+      <div class="person-picker person-picker-other" data-target="to" id="otherPicker">
         <button type="button" class="person-btn" data-person="Charlie">
           <span class="person-name">Charlie</span>
         </button>
@@ -219,10 +219,6 @@
       <div class="settings-row">
         <span class="settings-label">後端模式</span>
         <span class="settings-value" id="settingsBackend">—</span>
-      </div>
-      <div class="settings-row">
-        <span class="settings-label">這台裝置記住的「我」</span>
-        <span class="settings-value" id="settingsMe">—</span>
       </div>
       <div class="settings-row">
         <span class="settings-label">未結帳筆數</span>

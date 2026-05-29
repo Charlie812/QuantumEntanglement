@@ -30,7 +30,6 @@ const ORB_POSITIONS = {
   Eric:    { x: 290, y: 282 },
 };
 const SVG_NS = "http://www.w3.org/2000/svg";
-const LS_ME = "qe.me";
 const LS_LOCAL_ENTRIES = "qe.local.entries";
 const LS_LOCAL_SETTLEMENTS = "qe.local.settlements";
 const LS_FAB_POS = "qe.fab.pos";
@@ -242,8 +241,8 @@ const backend = FIREBASE_READY ? createFirestoreBackend() : createLocalBackend()
 // ====================================================================
 
 const state = {
-  me: null,
-  other: null,
+  from: null,                   // 欠錢的人（債務人）
+  to: null,                     // 被欠的人（債權人）
   expression: "",               // raw input string e.g. "100+50×3" — evaluated at submit
   note: "",
   entries: [],
@@ -419,16 +418,16 @@ function render() {
 }
 
 function renderPickers() {
-  // Row 1: 我是誰
-  $$('[data-target="me"] .person-btn').forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.person === state.me);
+  // Row 1: 誰欠錢
+  $$('[data-target="from"] .person-btn').forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.person === state.from);
   });
-  // Row 3: 我欠誰 (disable self)
-  $$('[data-target="other"] .person-btn').forEach((btn) => {
+  // Row 3: 欠誰 (不能欠自己 → disable 已選的債務人)
+  $$('[data-target="to"] .person-btn').forEach((btn) => {
     const p = btn.dataset.person;
-    btn.classList.toggle("disabled", p === state.me);
-    btn.disabled = p === state.me;
-    btn.classList.toggle("active", p === state.other);
+    btn.classList.toggle("disabled", p === state.from);
+    btn.disabled = p === state.from;
+    btn.classList.toggle("active", p === state.to);
   });
 }
 
@@ -465,9 +464,9 @@ function renderSubmit() {
   let amount = 0;
   try { amount = evalExpression(state.expression); } catch { amount = 0; }
   const valid =
-    state.me &&
-    state.other &&
-    state.me !== state.other &&
+    state.from &&
+    state.to &&
+    state.from !== state.to &&
     amount > 0;
   $("#submitBtn").disabled = !valid;
 }
@@ -599,7 +598,7 @@ function renderHistory() {
     time.textContent = fullTime(tsToMs(s.settledAt));
     const by = document.createElement("span");
     by.className = "settlement-by";
-    by.textContent = `${s.triggeredBy || "?"} 結帳 · 共 ${s.entryIds?.length || 0} 筆`;
+    by.textContent = `${s.triggeredBy ? s.triggeredBy + " 結帳 · " : ""}共 ${s.entryIds?.length || 0} 筆`;
     head.append(time, by);
     li.append(head);
 
@@ -1269,7 +1268,6 @@ function openSettings() {
   const unsettled = state.entries.filter((e) => !e.deleted && !e.settled).length;
   const deleted = state.entries.filter((e) => e.deleted).length;
   $("#settingsBackend").textContent = backend.mode === "firestore" ? "Firestore (sync)" : "本機 (demo)";
-  $("#settingsMe").textContent = state.me || "(未選)";
   $("#settingsUnsettled").textContent = unsettled;
   $("#settingsDeleted").textContent = deleted;
   $("#settingsSettlements").textContent = state.settlements.length;
@@ -1502,10 +1500,6 @@ function openSettleModal() {
     showToast("沒有東西可以結算");
     return;
   }
-  if (!state.me) {
-    showToast("請先選你是誰");
-    return;
-  }
 
   $("#settleSub").textContent = `共 ${r.activeCount} 筆糾纏、$${r.totalAmount.toLocaleString("en-US")}`;
 
@@ -1578,7 +1572,7 @@ async function confirmSettle() {
       entryIds: r.entryIds,
       balances: r.balances,
       transactions: r.transactions,
-      triggeredBy: state.me,
+      triggeredBy: null,
     });
     closeSettleModal();
     showToast("結帳完成、已封存");
@@ -1614,21 +1608,16 @@ async function confirmDelete() {
 // Actions
 // ====================================================================
 
-function selectMe(person) {
-  if (state.me === person) {
-    state.me = null;
-  } else {
-    state.me = person;
-  }
-  if (state.other === state.me) state.other = null;
-  if (state.me) localStorage.setItem(LS_ME, state.me);
-  else localStorage.removeItem(LS_ME);
+function selectFrom(person) {
+  state.from = state.from === person ? null : person;
+  // 不能欠自己 → 若債主跟新債務人撞，清掉債主
+  if (state.to === state.from) state.to = null;
   render();
 }
 
-function selectOther(person) {
-  if (person === state.me) return;
-  state.other = state.other === person ? null : person;
+function selectTo(person) {
+  if (person === state.from) return;
+  state.to = state.to === person ? null : person;
   render();
 }
 
@@ -1664,8 +1653,8 @@ function pressKey(key) {
 
 async function submitEntry() {
   const note = ($("#noteInput").value || "").trim();
-  if (!state.me || !state.other) return;
-  if (state.me === state.other) return;
+  if (!state.from || !state.to) return;
+  if (state.from === state.to) return;
 
   let amount;
   try {
@@ -1680,16 +1669,17 @@ async function submitEntry() {
   }
 
   const payload = {
-    from: state.me,
-    to: state.other,
+    from: state.from,
+    to: state.to,
     amount,
     note,
   };
   try {
     await backend.addEntry(payload);
-    // reset expression + other + note, keep me
+    // reset 整筆 — 每次記帳都從頭選誰欠誰
     state.expression = "";
-    state.other = null;
+    state.from = null;
+    state.to = null;
     $("#noteInput").value = "";
     state.note = "";
     render();
@@ -1713,11 +1703,11 @@ function toggleView() {
 
 function bindUI() {
   // person pickers
-  $$('[data-target="me"] .person-btn').forEach((btn) => {
-    btn.addEventListener("click", () => selectMe(btn.dataset.person));
+  $$('[data-target="from"] .person-btn').forEach((btn) => {
+    btn.addEventListener("click", () => selectFrom(btn.dataset.person));
   });
-  $$('[data-target="other"] .person-btn').forEach((btn) => {
-    btn.addEventListener("click", () => selectOther(btn.dataset.person));
+  $$('[data-target="to"] .person-btn').forEach((btn) => {
+    btn.addEventListener("click", () => selectTo(btn.dataset.person));
   });
 
   // keypad
@@ -1814,9 +1804,6 @@ if ("serviceWorker" in navigator) {
 
 function init() {
   bindUI();
-
-  const stored = localStorage.getItem(LS_ME);
-  if (stored && PEOPLE.includes(stored)) state.me = stored;
 
   if (backend.mode === "local") {
     showToast("Demo 模式：請先設定 firebase-config.js", 3500);
